@@ -98,8 +98,26 @@ const money = new Intl.NumberFormat("pt-BR", {
 const els = {};
 
 document.addEventListener("DOMContentLoaded", () => {
+  bindBrowserGuard();
   initApp();
 });
+
+function bindBrowserGuard() {
+  document.addEventListener("contextmenu", (event) => event.preventDefault());
+  document.addEventListener("keydown", (event) => {
+    const key = String(event.key || "").toLowerCase();
+    const blocked =
+      event.key === "F12" ||
+      (event.ctrlKey && key === "u") ||
+      (event.ctrlKey && key === "s") ||
+      (event.ctrlKey && event.shiftKey && ["i", "j", "c"].includes(key));
+
+    if (blocked) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+}
 
 async function initApp() {
   cacheElements();
@@ -1975,15 +1993,7 @@ function groupSalesByProduct(orders) {
 
 function updateLoginChrome() {
   if (!els.loginModeHint) return;
-  if (USE_SUPABASE) {
-    els.loginModeHint.textContent = "Entre com o servidor local ligado neste PC.";
-    return;
-  }
-  if (LOCAL_DEMO_ENABLED) {
-    els.loginModeHint.textContent = "Modo local de teste: admin / 1234.";
-    return;
-  }
-  els.loginModeHint.textContent = "Supabase nao configurado para producao.";
+  els.loginModeHint.textContent = "";
 }
 
 function isLocalRuntime() {
