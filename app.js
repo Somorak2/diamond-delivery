@@ -901,16 +901,36 @@ function switchAdminTab(tab) {
   });
 }
 
-function createAdminUser(event) {
+async function createAdminUser(event) {
   event.preventDefault();
-  if (USE_SUPABASE) {
-    showToast("Usuarios no Supabase", "Crie o acesso no Auth e autorize na tabela de perfis.");
-    return;
-  }
   const username = els.adminUsername.value.trim();
   const displayName = els.adminDisplayName.value.trim();
   const password = els.adminPassword.value.trim();
   if (!username || !displayName || !password) return;
+
+  if (USE_SUPABASE) {
+    try {
+      const createdUser = await apiRequest("/profiles", {
+        method: "POST",
+        body: {
+          email: username,
+          displayName,
+          password,
+          role: els.adminRole.value
+        }
+      });
+      state.users = mergeUsers([createdUser], state.users);
+      els.adminUserForm.reset();
+      await loadRemoteUsers();
+      renderAdminUsers();
+      showToast("Usuario criado", displayName);
+    } catch (error) {
+      console.error("Falha ao criar usuario", error);
+      showToast("Erro ao criar usuario", error.message || "Confira o servidor local.");
+    }
+    return;
+  }
+
   if (state.users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
     showToast("Usuario ja existe", username);
     return;
@@ -928,15 +948,31 @@ function createAdminUser(event) {
   showToast("Usuario criado", displayName);
 }
 
-function resetAdminPassword(event) {
+async function resetAdminPassword(event) {
   event.preventDefault();
-  if (USE_SUPABASE) {
-    showToast("Senhas no Supabase", "Atualize a senha pelo Auth do Supabase.");
-    return;
-  }
   const user = state.users.find((item) => item.id === els.adminResetUser.value);
   const password = els.adminNewPassword.value.trim();
   if (!user || !password) return;
+
+  if (USE_SUPABASE) {
+    try {
+      await apiRequest("/profiles/password", {
+        method: "PUT",
+        body: {
+          userId: user.id,
+          password
+        }
+      });
+      els.adminResetForm.reset();
+      renderAdminUsers();
+      showToast("Senha atualizada", user.displayName);
+    } catch (error) {
+      console.error("Falha ao atualizar senha", error);
+      showToast("Erro ao atualizar senha", error.message || "Confira o servidor local.");
+    }
+    return;
+  }
+
   user.password = password;
   els.adminResetForm.reset();
   saveState();
