@@ -2,8 +2,9 @@ const STORAGE_KEY = "diamondDeliveryState.v2";
 const LEGACY_STORAGE_KEY = "diamondDeliveryState.v1";
 const SESSION_KEY = "diamondDeliverySession.v1";
 const API_SESSION_KEY = "diamondDeliveryApiSession.v1";
+const API_URL_STORAGE_KEY = "diamondDeliveryApiUrl.v1";
 const ENV = window.DIAMOND_DELIVERY_ENV || {};
-const API_URL = String(ENV.API_URL || "http://127.0.0.1:8787/api").replace(/\/+$/, "");
+const API_URL = resolveApiUrl();
 const USE_SUPABASE = Boolean(API_URL);
 const LOCAL_DEMO_ENABLED = !USE_SUPABASE && (isLocalRuntime() || String(ENV.ALLOW_LOCAL_DEMO || "").toLowerCase() === "true");
 const MEAT_POINTS = ["Mal passada", "Ao ponto", "Bem passada"];
@@ -77,6 +78,37 @@ const seedState = {
     }
   ]
 };
+
+function resolveApiUrl() {
+  const fallback = String(ENV.API_URL || "http://127.0.0.1:8787/api");
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const clearApi = params.get("clearApi");
+    if (clearApi === "1") {
+      localStorage.removeItem(API_URL_STORAGE_KEY);
+      return normalizeApiUrl(fallback);
+    }
+
+    const queryApi = params.get("api");
+    if (queryApi) {
+      const normalized = normalizeApiUrl(queryApi);
+      localStorage.setItem(API_URL_STORAGE_KEY, normalized);
+      return normalized;
+    }
+
+    const storedApi = localStorage.getItem(API_URL_STORAGE_KEY);
+    if (storedApi) return normalizeApiUrl(storedApi);
+  } catch (error) {
+    console.warn("Nao foi possivel carregar API_URL dinamica", error);
+  }
+  return normalizeApiUrl(fallback);
+}
+
+function normalizeApiUrl(value) {
+  const url = String(value || "").trim().replace(/\/+$/, "");
+  if (!url) return "";
+  return url.endsWith("/api") ? url : `${url}/api`;
+}
 
 let activeUser = null;
 let apiSession = loadStoredApiSession();
