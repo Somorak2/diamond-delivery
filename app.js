@@ -8,6 +8,25 @@ const API_URL = resolveApiUrl();
 const USE_SUPABASE = Boolean(API_URL);
 const LOCAL_DEMO_ENABLED = !USE_SUPABASE && (isLocalRuntime() || String(ENV.ALLOW_LOCAL_DEMO || "").toLowerCase() === "true");
 const MEAT_POINTS = ["Mal passada", "Ao ponto", "Bem passada"];
+const POS_DEFAULT_TABLE_COUNT = 21;
+const POS_CATEGORIES = [
+  "Bebidas",
+  "Lanches",
+  "Cerveja 600 ml",
+  "Sorvete kg",
+  "Pasteis",
+  "Cigarros",
+  "Sinuca",
+  "Drinks",
+  "Sorvetes Domere",
+  "Sucos Naturais (Polpa)",
+  "Milkshakes",
+  "Doces e Snacks",
+  "Porcoes",
+  "Isqueiro",
+  "Itens divididos",
+  "Despesas de refeicao"
+];
 const DEMO_USERS = [
   { id: "user-admin", username: "admin", displayName: "Administrador", password: "1234", role: "admin" },
   { id: "user-kitchen", username: "cozinha", displayName: "Cozinha", password: "1234", role: "cozinha" }
@@ -20,20 +39,18 @@ const seedState = {
   calls: [],
   staffAlerts: [],
   users: [],
-  tables: [
-    { id: "table-1", number: 1, seats: 4, currentOrderId: "order-1" },
-    { id: "table-2", number: 2, seats: 2, currentOrderId: null },
-    { id: "table-3", number: 3, seats: 4, currentOrderId: "order-2" },
-    { id: "table-4", number: 4, seats: 6, currentOrderId: null },
-    { id: "table-5", number: 5, seats: 4, currentOrderId: null },
-    { id: "table-6", number: 6, seats: 2, currentOrderId: null }
-  ],
+  tables: Array.from({ length: POS_DEFAULT_TABLE_COUNT }, (_, index) => ({
+    id: `table-${index + 1}`,
+    number: index + 1,
+    seats: 4,
+    currentOrderId: index === 0 ? "order-1" : index === 2 ? "order-2" : null
+  })),
   catalog: [
-    { id: "prod-1", name: "X-Burger Diamond", category: "Comidas", price: 18.9, stock: 24 },
-    { id: "prod-2", name: "Batata cheddar", category: "Comidas", price: 14.5, stock: 18 },
-    { id: "prod-3", name: "Coca-Cola lata", category: "Bebidas", price: 6.5, stock: 36 },
-    { id: "prod-4", name: "Suco natural", category: "Bebidas", price: 8.0, stock: 20 },
-    { id: "prod-5", name: "Combo casal", category: "Combos", price: 49.9, stock: 12 }
+    { id: "prod-1", name: "X-Burger Diamond", category: "Lanches", price: 18.9, stock: 24 },
+    { id: "prod-2", name: "Batata cheddar", category: "Porcoes", price: 14.5, stock: 18 },
+    { id: "prod-3", name: "Coca-Cola KS 290ml", category: "Bebidas", price: 6.0, stock: 36 },
+    { id: "prod-4", name: "Suco natural", category: "Sucos Naturais (Polpa)", price: 8.0, stock: 20 },
+    { id: "prod-5", name: "Fanta Laranja 1,5L", category: "Bebidas", price: 14.0, stock: 12 }
   ],
   stock: [
     { id: "stock-1", name: "Pao brioche", qty: 42, min: 12, unit: "un" },
@@ -115,6 +132,8 @@ let apiSession = loadStoredApiSession();
 let state = loadState();
 let catalogFilter = "Todos";
 let serviceCategory = "Todos";
+let simpleScreen = "tables";
+let simpleSelectedCategory = POS_CATEGORIES[0];
 let callSpotlightTimer = null;
 let remotePollTimer = null;
 let remoteSaveTimer = null;
@@ -184,6 +203,29 @@ function cacheElements() {
   Object.assign(els, {
     loginView: document.getElementById("loginView"),
     appView: document.getElementById("appView"),
+    simplePosView: document.getElementById("simplePosView"),
+    simpleTabButtons: Array.from(document.querySelectorAll("[data-simple-tab]")),
+    simpleTablesScreen: document.getElementById("simpleTablesScreen"),
+    simpleMenuScreen: document.getElementById("simpleMenuScreen"),
+    simpleCommandsScreen: document.getElementById("simpleCommandsScreen"),
+    simpleTableSearch: document.getElementById("simpleTableSearch"),
+    simpleMenuSearch: document.getElementById("simpleMenuSearch"),
+    simpleCommandSearch: document.getElementById("simpleCommandSearch"),
+    simpleTablesGrid: document.getElementById("simpleTablesGrid"),
+    simpleDeliveryBtn: document.getElementById("simpleDeliveryBtn"),
+    simpleBackTablesBtn: document.getElementById("simpleBackTablesBtn"),
+    simpleMenuTitle: document.getElementById("simpleMenuTitle"),
+    simpleCategoryTabs: document.getElementById("simpleCategoryTabs"),
+    simpleCategoryTitle: document.getElementById("simpleCategoryTitle"),
+    simpleProductList: document.getElementById("simpleProductList"),
+    simpleCartInfo: document.getElementById("simpleCartInfo"),
+    simpleCartTotal: document.getElementById("simpleCartTotal"),
+    simpleCartItems: document.getElementById("simpleCartItems"),
+    simpleCartClearBtn: document.getElementById("simpleCartClearBtn"),
+    simpleSendOrderBtn: document.getElementById("simpleSendOrderBtn"),
+    simpleCommandList: document.getElementById("simpleCommandList"),
+    simpleAdminBtn: document.getElementById("simpleAdminBtn"),
+    simpleLogoutBtn: document.getElementById("simpleLogoutBtn"),
     loginForm: document.getElementById("loginForm"),
     loginError: document.getElementById("loginError"),
     loginModeHint: document.getElementById("loginModeHint"),
@@ -262,6 +304,21 @@ function bindEvents() {
   els.loginForm.addEventListener("submit", handleLogin);
   els.logoutBtn.addEventListener("click", handleLogout);
   els.adminSettingsBtn.addEventListener("click", openAdminModal);
+  els.simpleLogoutBtn?.addEventListener("click", handleLogout);
+  els.simpleAdminBtn?.addEventListener("click", openAdminModal);
+  els.simpleTabButtons?.forEach((button) => {
+    button.addEventListener("click", () => switchSimpleScreen(button.dataset.simpleTab));
+  });
+  els.simpleTableSearch?.addEventListener("input", renderSimplePos);
+  els.simpleMenuSearch?.addEventListener("input", renderSimplePos);
+  els.simpleCommandSearch?.addEventListener("input", renderSimplePos);
+  els.simpleBackTablesBtn?.addEventListener("click", () => switchSimpleScreen("tables"));
+  els.simpleDeliveryBtn?.addEventListener("click", openSimpleDelivery);
+  els.simpleCartClearBtn?.addEventListener("click", () => {
+    clearServiceDraft();
+    renderSimplePos();
+  });
+  els.simpleSendOrderBtn?.addEventListener("click", sendSimpleOrder);
   els.navButtons.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
@@ -384,7 +441,8 @@ function showApp() {
   els.loginView.classList.add("is-hidden");
   els.appView.classList.remove("is-hidden");
   const user = currentUser();
-  const targetView = user?.role === "cozinha" ? "orders" : requestedView() || state.activeView || "overview";
+  const targetView = user?.role === "cozinha" ? "orders" : requestedView() || "tables";
+  simpleScreen = user?.role === "cozinha" ? "commands" : "tables";
   switchView(targetView);
   render();
 }
@@ -415,6 +473,7 @@ function requestedView() {
 
 function render() {
   renderUserChrome();
+  renderSimplePos();
   renderMetrics();
   renderOverviewTables();
   renderCallBoard();
@@ -437,6 +496,292 @@ function renderUserChrome() {
   if (els.adminSettingsBtn) {
     els.adminSettingsBtn.classList.toggle("is-hidden", user?.role !== "admin");
   }
+  if (els.simpleAdminBtn) {
+    els.simpleAdminBtn.classList.toggle("is-hidden", user?.role !== "admin");
+  }
+}
+
+function switchSimpleScreen(screen) {
+  if (!["tables", "menu", "commands"].includes(screen)) screen = "tables";
+  simpleScreen = screen;
+  renderSimplePos();
+}
+
+function renderSimplePos() {
+  if (!els.simplePosView) return;
+  const user = currentUser();
+  if (user?.role === "cozinha" && simpleScreen !== "commands") simpleScreen = "commands";
+
+  els.simplePosView.classList.toggle("is-menu-mode", simpleScreen === "menu");
+  els.simpleTabButtons.forEach((button) => {
+    const tab = button.dataset.simpleTab;
+    const isActive = simpleScreen === tab || (simpleScreen === "menu" && tab === "tables");
+    button.classList.toggle("is-active", isActive);
+  });
+
+  els.simpleTablesScreen?.classList.toggle("is-active", simpleScreen === "tables");
+  els.simpleMenuScreen?.classList.toggle("is-active", simpleScreen === "menu");
+  els.simpleCommandsScreen?.classList.toggle("is-active", simpleScreen === "commands");
+
+  if (simpleScreen === "tables") renderSimpleTables();
+  if (simpleScreen === "menu") renderSimpleMenu();
+  if (simpleScreen === "commands") renderSimpleCommands();
+}
+
+function renderSimpleTables() {
+  if (!els.simpleTablesGrid) return;
+  const query = String(els.simpleTableSearch?.value || "").trim().toLowerCase();
+  const tables = sortedTables()
+    .filter((table) => !isDeliveryTable(table))
+    .filter((table) => !query || simpleTableLabel(table).toLowerCase().includes(query));
+
+  els.simpleTablesGrid.innerHTML = tables.map((table) => {
+    const order = currentOrder(table);
+    const status = simpleTableStatus(table);
+    const total = order ? orderTotal(order) : 0;
+    return `
+      <button class="simple-table-card ${status.className}" type="button" data-simple-table-id="${table.id}" aria-label="${escapeHtml(simpleTableLabel(table))}">
+        <strong>${escapeHtml(simpleTableLabel(table))}</strong>
+        ${order ? `<span>${money.format(total)}</span>` : ""}
+      </button>
+    `;
+  }).join("") || emptyState("Nenhuma mesa encontrada.");
+
+  els.simpleTablesGrid.querySelectorAll("[data-simple-table-id]").forEach((button) => {
+    button.addEventListener("click", () => openSimpleTable(button.dataset.simpleTableId));
+  });
+}
+
+function renderSimpleMenu() {
+  if (!els.simpleMenuScreen) return;
+  const table = state.tables.find((item) => item.id === state.selectedTableId) || sortedTables()[0];
+  if (!table) {
+    simpleScreen = "tables";
+    renderSimpleTables();
+    return;
+  }
+
+  state.selectedTableId = table.id;
+  setSimpleDraftTable(table.id);
+  els.simpleMenuTitle.textContent = simpleTableLabel(table);
+
+  const categories = posCategories();
+  if (!categories.includes(simpleSelectedCategory)) simpleSelectedCategory = categories[0] || "";
+
+  els.simpleCategoryTabs.innerHTML = categories.map((category) => `
+    <button type="button" class="${category === simpleSelectedCategory ? "is-active" : ""}" data-simple-category="${escapeHtml(category)}">
+      ${escapeHtml(category)}
+    </button>
+  `).join("");
+
+  els.simpleCategoryTabs.querySelectorAll("[data-simple-category]").forEach((button) => {
+    button.addEventListener("click", () => {
+      simpleSelectedCategory = button.dataset.simpleCategory;
+      renderSimpleMenu();
+    });
+  });
+
+  els.simpleCategoryTitle.textContent = simpleSelectedCategory || "Produtos";
+  const query = String(els.simpleMenuSearch?.value || "").trim().toLowerCase();
+  const products = state.catalog.filter((product) => {
+    const matchesCategory = !simpleSelectedCategory || product.category === simpleSelectedCategory;
+    const matchesQuery = !query || product.name.toLowerCase().includes(query);
+    return matchesCategory && matchesQuery;
+  });
+
+  els.simpleProductList.innerHTML = products.map((product) => {
+    const available = productAvailable(product.id);
+    const disabled = available <= 0 ? "disabled" : "";
+    return `
+      <button class="simple-product-row" type="button" data-simple-add="${product.id}" ${disabled}>
+        <span class="simple-product-thumb" aria-hidden="true">${escapeHtml(productInitials(product.name))}</span>
+        <span class="simple-product-name">${escapeHtml(product.name)}</span>
+        <strong>${money.format(product.price)}</strong>
+      </button>
+    `;
+  }).join("") || emptyState("Nenhum produto nesta categoria.");
+
+  els.simpleProductList.querySelectorAll("[data-simple-add]").forEach((button) => {
+    button.addEventListener("click", () => addServiceProduct(button.dataset.simpleAdd));
+  });
+
+  renderSimpleCart();
+}
+
+function renderSimpleCart() {
+  const draft = serviceDraft();
+  const qty = draft.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  const total = draftTotal(draft);
+  if (els.simpleCartInfo) els.simpleCartInfo.textContent = qty === 1 ? "1 item na comanda" : `${qty} itens na comanda`;
+  if (els.simpleCartTotal) els.simpleCartTotal.textContent = money.format(total);
+  if (els.simpleSendOrderBtn) els.simpleSendOrderBtn.disabled = qty === 0;
+  if (els.simpleCartClearBtn) els.simpleCartClearBtn.disabled = qty === 0;
+  if (!els.simpleCartItems) return;
+
+  els.simpleCartItems.innerHTML = draft.items.map((item) => `
+    <article class="simple-cart-row">
+      <div>
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>${money.format(item.qty * item.price)}</span>
+      </div>
+      <div class="simple-stepper">
+        <button type="button" data-simple-cart="minus" data-product-id="${item.productId}">-</button>
+        <span>${item.qty}</span>
+        <button type="button" data-simple-cart="plus" data-product-id="${item.productId}">+</button>
+      </div>
+    </article>
+  `).join("");
+
+  els.simpleCartItems.querySelectorAll("[data-simple-cart]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const delta = button.dataset.simpleCart === "plus" ? 1 : -1;
+      adjustServiceProduct(button.dataset.productId, delta);
+      renderSimpleCart();
+    });
+  });
+}
+
+function renderSimpleCommands() {
+  if (!els.simpleCommandList) return;
+  const query = String(els.simpleCommandSearch?.value || "").trim().toLowerCase();
+  const orders = state.orders
+    .filter((order) => Array.isArray(order.items) && order.items.length)
+    .filter((order) => {
+      const haystack = [
+        simpleOrderLabel(order),
+        order.customerName || "",
+        statusLabel(order.status),
+        ...order.items.map((item) => item.name)
+      ].join(" ").toLowerCase();
+      return !query || haystack.includes(query);
+    })
+    .sort((a, b) => {
+      const aClosed = ["closed", "delivered"].includes(a.status) ? 1 : 0;
+      const bClosed = ["closed", "delivered"].includes(b.status) ? 1 : 0;
+      return aClosed - bClosed || Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0);
+    });
+
+  els.simpleCommandList.innerHTML = orders.map((order) => `
+    <article class="simple-command-card">
+      <header>
+        <div>
+          <strong>${escapeHtml(simpleOrderLabel(order))}</strong>
+          <span>${escapeHtml(order.customerName || order.attendantName || "Atendente")}</span>
+        </div>
+        <span class="status-pill ${statusClass(order.status)}">${statusLabel(order.status)}</span>
+      </header>
+      <div class="simple-command-lines">
+        ${order.items.map((item) => `
+          <div>
+            <span>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</span>
+            <strong>${money.format(item.qty * item.price)}</strong>
+          </div>
+        `).join("")}
+      </div>
+      <footer>
+        <strong>${money.format(orderTotal(order))}</strong>
+        <div class="simple-command-actions">
+          ${order.status === "open" ? `<button type="button" data-simple-order-action="send" data-order-id="${order.id}">Enviar</button>` : ""}
+          ${order.status === "waiting" ? `<button type="button" data-simple-order-action="accept" data-order-id="${order.id}">Aceitar</button>` : ""}
+          ${order.status === "accepted" ? `<button type="button" data-simple-order-action="produce" data-order-id="${order.id}">Produzir</button>` : ""}
+          ${order.status === "preparing" ? `<button type="button" data-simple-order-action="ready" data-order-id="${order.id}">Pronto</button>` : ""}
+          ${order.status === "ready" ? `<button type="button" data-simple-order-action="call" data-order-id="${order.id}">Chamar</button>` : ""}
+          ${!["closed", "delivered"].includes(order.status) ? `<button type="button" data-simple-order-action="close" data-order-id="${order.id}">Finalizar</button>` : ""}
+        </div>
+      </footer>
+    </article>
+  `).join("") || emptyState("Nenhuma comanda encontrada.");
+
+  els.simpleCommandList.querySelectorAll("[data-simple-order-action]").forEach((button) => {
+    button.addEventListener("click", () => handleSimpleOrderAction(button.dataset.simpleOrderAction, button.dataset.orderId));
+  });
+}
+
+function openSimpleTable(tableId) {
+  const table = state.tables.find((item) => item.id === tableId);
+  if (!table) return;
+  state.selectedTableId = table.id;
+  setSimpleDraftTable(table.id);
+  simpleScreen = "menu";
+  saveState();
+  render();
+}
+
+function openSimpleDelivery() {
+  let table = state.tables.find(isDeliveryTable);
+  if (!table) {
+    table = { id: "table-delivery", number: 999, seats: 0, currentOrderId: null, isDelivery: true };
+    state.tables.push(table);
+  }
+  openSimpleTable(table.id);
+}
+
+function sendSimpleOrder() {
+  const draft = serviceDraft();
+  const beforeQty = draft.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  sendServiceOrder();
+  if (beforeQty && serviceDraft().items.length === 0) {
+    simpleScreen = "tables";
+  }
+  renderSimplePos();
+}
+
+function handleSimpleOrderAction(action, orderId) {
+  if (action === "send") updateOrderStatus(orderId, "waiting");
+  if (action === "accept") updateOrderStatus(orderId, "accepted");
+  if (action === "produce") updateOrderStatus(orderId, "preparing");
+  if (action === "ready") markOrderReady(orderId);
+  if (action === "call") callOrder(orderId);
+  if (action === "close") closeOrder(orderId);
+}
+
+function simpleTableStatus(table) {
+  const order = currentOrder(table);
+  if (!order) return { label: "Livre", className: "is-free" };
+  if (order.status === "ready") return { label: "Em pagamento", className: "is-payment" };
+  return { label: "Ocupada", className: "is-occupied" };
+}
+
+function posCategories() {
+  const categories = new Set(POS_CATEGORIES);
+  state.catalog.forEach((product) => {
+    if (product.category) categories.add(product.category);
+  });
+  return Array.from(categories);
+}
+
+function isDeliveryTable(table) {
+  return Boolean(table?.isDelivery) || Number(table?.number) === 999;
+}
+
+function simpleTableLabel(table) {
+  return isDeliveryTable(table) ? "Delivery/Para Levar" : `Mesa ${table.number}`;
+}
+
+function simpleOrderLabel(order) {
+  const table = state.tables.find((item) => item.id === order.tableId);
+  if (table) return simpleTableLabel(table);
+  return Number(order.tableNumber) === 999 ? "Delivery/Para Levar" : `Mesa ${order.tableNumber || "-"}`;
+}
+
+function setSimpleDraftTable(tableId) {
+  const draft = serviceDraft();
+  if (draft.tableId !== tableId) {
+    draft.items = [];
+    draft.customerName = "";
+  }
+  draft.tableId = tableId;
+}
+
+function productInitials(name) {
+  const words = String(name || "Produto")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return "PD";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words[1][0]}`.toUpperCase();
 }
 
 function renderMetrics() {
@@ -1162,6 +1507,7 @@ function addServiceProduct(productId) {
 
   saveState();
   renderService();
+  renderSimplePos();
   showToast("Item adicionado", product.name);
 }
 
@@ -1181,6 +1527,7 @@ function adjustServiceProduct(productId, delta) {
   }
   saveState();
   renderService();
+  renderSimplePos();
 }
 
 function updateServiceMeatPoint(productId, meatPoint) {
@@ -1197,6 +1544,7 @@ function clearServiceDraft() {
   draft.customerName = "";
   saveState();
   renderService();
+  renderSimplePos();
 }
 
 function sendServiceOrder() {
@@ -1571,6 +1919,17 @@ function sortedTables() {
   return [...state.tables].sort((a, b) => a.number - b.number);
 }
 
+function ensureDefaultTables(tables) {
+  const nextTables = tables.map((table) => ({ ...table }));
+  const usedNumbers = new Set(nextTables.map((table) => Number(table.number)));
+  for (let number = 1; number <= POS_DEFAULT_TABLE_COUNT; number += 1) {
+    if (!usedNumbers.has(number)) {
+      nextTables.push({ id: `table-${number}`, number, seats: 4, currentOrderId: null });
+    }
+  }
+  return nextTables.sort((a, b) => Number(a.number || 0) - Number(b.number || 0));
+}
+
 function lowStockItems() {
   return state.stock.filter((item) => item.qty <= item.min);
 }
@@ -1595,7 +1954,7 @@ function normalizeState(nextState) {
     ...structuredClone(seedState),
     ...nextState
   };
-  normalized.tables = Array.isArray(nextState.tables) ? nextState.tables : [];
+  normalized.tables = ensureDefaultTables(Array.isArray(nextState.tables) ? nextState.tables : []);
   normalized.catalog = Array.isArray(nextState.catalog) ? nextState.catalog : [];
   normalized.stock = Array.isArray(nextState.stock) ? nextState.stock : [];
   normalized.orders = Array.isArray(nextState.orders) ? nextState.orders : [];

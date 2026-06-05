@@ -6,9 +6,9 @@
     <title>Diamond Delivery</title>
     <meta name="theme-color" content="#101218">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css?v=public-api-1">
-    <script src="env.js?v=public-api-1"></script>
-    <script src="app.js?v=public-api-1" defer></script>
+    <link rel="stylesheet" href="styles.css?v=simple-pos-1">
+    <script src="env.js?v=simple-pos-1"></script>
+    <script src="app.js?v=simple-pos-1" defer></script>
   </head>
   <body>
     <main id="loginView" class="login-shell" aria-labelledby="loginTitle">
@@ -35,6 +35,72 @@
     </main>
 
     <main id="appView" class="app-shell is-hidden" aria-label="Diamond Delivery">
+      <section id="simplePosView" class="simple-pos-shell" aria-label="PDV simplificado">
+        <header class="simple-pos-tabs" aria-label="Principal">
+          <button type="button" class="simple-tab is-active" data-simple-tab="tables">Mesas</button>
+          <button type="button" class="simple-tab" data-simple-tab="commands">Comandas</button>
+          <div class="simple-top-actions">
+            <button id="simpleAdminBtn" type="button" class="simple-icon-button" title="Admin" aria-label="Admin">Adm</button>
+            <button id="simpleLogoutBtn" type="button" class="simple-icon-button" title="Sair" aria-label="Sair">Sair</button>
+          </div>
+        </header>
+
+        <section id="simpleTablesScreen" class="simple-screen is-active">
+          <label class="simple-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="simpleTableSearch" type="search" autocomplete="off" placeholder="Buscar por nome da mesa">
+          </label>
+
+          <div class="simple-legend" aria-label="Legenda das mesas">
+            <span><i class="legend-dot free"></i>Livres</span>
+            <span><i class="legend-dot occupied"></i>Ocupadas</span>
+            <span><i class="legend-dot payment"></i>Em pagamento</span>
+          </div>
+
+          <div id="simpleTablesGrid" class="simple-tables-grid"></div>
+
+          <button id="simpleDeliveryBtn" type="button" class="simple-delivery-button">
+            <span aria-hidden="true">⌁</span>
+            Delivery/Para Levar
+          </button>
+        </section>
+
+        <section id="simpleMenuScreen" class="simple-screen">
+          <header class="simple-menu-bar">
+            <button id="simpleBackTablesBtn" type="button" class="simple-back-button" aria-label="Voltar">‹</button>
+            <strong id="simpleMenuTitle">Mesa</strong>
+            <label class="simple-menu-search">
+              <span aria-hidden="true">⌕</span>
+              <input id="simpleMenuSearch" type="search" autocomplete="off" placeholder="Buscar produto">
+            </label>
+          </header>
+
+          <nav id="simpleCategoryTabs" class="simple-category-tabs" aria-label="Categorias"></nav>
+          <h2 id="simpleCategoryTitle" class="simple-category-title">Bebidas</h2>
+          <div id="simpleProductList" class="simple-product-list"></div>
+
+          <footer class="simple-cart-bar">
+            <div>
+              <span id="simpleCartInfo">0 itens</span>
+              <strong id="simpleCartTotal">R$ 0,00</strong>
+            </div>
+            <div class="simple-cart-actions">
+              <button id="simpleCartClearBtn" type="button" class="simple-secondary-button">Limpar</button>
+              <button id="simpleSendOrderBtn" type="button" class="simple-primary-button">Enviar</button>
+            </div>
+          </footer>
+          <div id="simpleCartItems" class="simple-cart-items"></div>
+        </section>
+
+        <section id="simpleCommandsScreen" class="simple-screen">
+          <label class="simple-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="simpleCommandSearch" type="search" autocomplete="off" placeholder="Buscar por mesa, produto ou cliente">
+          </label>
+          <div id="simpleCommandList" class="simple-command-list"></div>
+        </section>
+      </section>
+
       <header class="topbar">
         <div class="topbar-brand">
           <img src="diamond.png" alt="Diamond Delivery" class="topbar-logo">
