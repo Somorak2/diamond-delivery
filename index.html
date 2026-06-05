@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Diamond Delivery</title>
+    <meta name="theme-color" content="#101218">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css?v=local-api-1">
+    <script src="env.js?v=local-api-1"></script>
+    <script src="app.js?v=local-api-1" defer></script>
+  </head>
+  <body>
+    <main id="loginView" class="login-shell" aria-labelledby="loginTitle">
+      <section class="login-window">
+        <div class="brand-mark">
+          <img src="diamond.png" alt="Diamond Delivery" class="login-logo">
+        </div>
+        <h1 id="loginTitle">Diamond Delivery</h1>
+        <form id="loginForm" class="login-form">
+          <label for="username">Email</label>
+          <input id="username" name="username" type="text" inputmode="email" autocomplete="username" placeholder="admin@diamond.local" required>
+
+          <label for="password">Senha</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Senha" required>
+
+          <button type="submit" class="primary-action">Entrar</button>
+          <p id="loginModeHint" class="form-help"></p>
+          <p id="loginError" class="form-error" role="alert"></p>
+        </form>
+      </section>
+
+      <footer class="login-footer">
+        <span>Desenvolvido pelo Engenheiro</span>
+      </footer>
+    </main>
+
+    <main id="appView" class="app-shell is-hidden" aria-label="Diamond Delivery">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <img src="diamond.png" alt="Diamond Delivery" class="topbar-logo">
+        </div>
+      </header>
+
+      <div class="workspace">
+        <nav class="side-nav" aria-label="Modulos">
+          <button class="nav-button is-active" type="button" data-view="overview">
+            <span class="nav-icon" aria-hidden="true">01</span>
+            <span>Inicial</span>
+          </button>
+          <button class="nav-button" type="button" data-view="tables">
+            <span class="nav-icon" aria-hidden="true">02</span>
+            <span>Mesas</span>
+          </button>
+          <button class="nav-button" type="button" data-view="orders">
+            <span class="nav-icon" aria-hidden="true">03</span>
+            <span>Cozinha</span>
+          </button>
+          <button class="nav-button" type="button" data-view="service">
+            <span class="nav-icon" aria-hidden="true">04</span>
+            <span>Atendimento</span>
+          </button>
+          <button class="nav-button" type="button" data-view="catalog">
+            <span class="nav-icon" aria-hidden="true">05</span>
+            <span>Catalogo</span>
+          </button>
+          <button class="nav-button" type="button" data-view="stock">
+            <span class="nav-icon" aria-hidden="true">06</span>
+            <span>Estoque</span>
+          </button>
+
+          <div class="side-admin">
+            <span id="currentClock" class="clock"></span>
+            <span id="currentUserLabel" class="side-user">Atendente</span>
+            <div class="side-admin-actions">
+              <button id="adminSettingsBtn" type="button" class="icon-only-action" aria-label="Configuracoes" title="Configuracoes">
+                <span aria-hidden="true">⚙</span>
+              </button>
+              <button id="logoutBtn" type="button" class="ghost-action side-logout">Sair</button>
+            </div>
+          </div>
+        </nav>
+
+        <section class="content-shell">
+          <section id="overviewView" class="view-panel is-active" data-panel="overview">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Painel inicial</p>
+                <h2>Operacao em tempo real</h2>
+              </div>
+              <button id="quickCallBtn" type="button" class="primary-action small-action">Chamar ultimo pronto</button>
+            </div>
+
+            <div id="metricsGrid" class="metrics-grid"></div>
+
+            <div class="split-layout">
+              <section class="module-panel">
+                <div class="panel-title-row">
+                  <h3>Mesas agora</h3>
+                  <button type="button" class="text-action" data-jump="tables">Ver mesas</button>
+                </div>
+                <div id="overviewTables" class="compact-table-list"></div>
+              </section>
+
+              <section class="module-panel call-panel">
+                <div class="panel-title-row">
+                  <h3>Chamada de pedido pronto</h3>
+                  <button type="button" id="clearCallsBtn" class="text-action">Limpar</button>
+                </div>
+                <div id="readyCallBoard" class="call-board"></div>
+              </section>
+            </div>
+
+            <footer class="app-footer">
+              <span>Desenvolvido pelo Engenheiro</span>
+            </footer>
+          </section>
+
+          <section id="tablesView" class="view-panel" data-panel="tables">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Controle de mesas</p>
+                <h2>Mesas numeradas</h2>
+              </div>
+              <form id="tableForm" class="inline-form">
+                <input id="tableNumber" type="number" min="1" placeholder="Mesa" required>
+                <input id="tableSeats" type="number" min="1" placeholder="Lugares">
+                <button type="submit" class="primary-action small-action">Adicionar</button>
+              </form>
+            </div>
+
+            <div class="table-workbench">
+              <div id="tablesGrid" class="tables-grid"></div>
+              <aside id="tableDetail" class="detail-panel"></aside>
+            </div>
+          </section>
+
+          <section id="ordersView" class="view-panel" data-panel="orders">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Cozinha</p>
+                <h2>Fila de pedidos</h2>
+              </div>
+            </div>
+
+            <div class="kitchen-board">
+              <section class="module-panel">
+                <div class="panel-title-row">
+                  <h3>Aguardando aceite</h3>
+                </div>
+                <div id="kitchenIncoming" class="order-list"></div>
+              </section>
+
+              <section class="module-panel">
+                <div class="panel-title-row">
+                  <h3>Em producao</h3>
+                </div>
+                <div id="kitchenProduction" class="order-list"></div>
+              </section>
+
+              <section class="module-panel">
+                <div class="panel-title-row">
+                  <h3>Prontos para retirada</h3>
+                </div>
+                <div id="readyOrders" class="order-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="serviceView" class="view-panel service-view" data-panel="service">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Garcom mobile</p>
+                <h2>Atendimento na mesa</h2>
+              </div>
+              <div class="service-select-wrap">
+                <label for="serviceTableSelect">Mesa</label>
+                <select id="serviceTableSelect"></select>
+              </div>
+            </div>
+
+            <div id="serviceStatusStrip" class="service-status-strip"></div>
+
+            <div class="service-layout">
+              <section class="service-menu">
+                <div class="service-toolbar">
+                  <input id="serviceSearch" type="search" placeholder="Buscar item">
+                  <div class="segmented-filter service-category-filter" aria-label="Filtrar atendimento">
+                    <button type="button" class="is-active" data-service-category="Todos">Todos</button>
+                    <button type="button" data-service-category="Comidas">Comidas</button>
+                    <button type="button" data-service-category="Bebidas">Bebidas</button>
+                    <button type="button" data-service-category="Combos">Combos</button>
+                  </div>
+                </div>
+                <div id="serviceProductGrid" class="service-product-grid"></div>
+              </section>
+
+              <aside class="service-cart">
+                <div class="panel-title-row">
+                  <h3>Pedido da mesa</h3>
+                  <button id="serviceClearBtn" type="button" class="text-action">Limpar</button>
+                </div>
+                <label for="serviceCustomerName">Cliente</label>
+                <input id="serviceCustomerName" type="text" placeholder="Nome do cliente">
+                <div id="serviceCartList" class="service-cart-list"></div>
+                <div class="service-cart-total">
+                  <span>Total</span>
+                  <strong id="serviceCartTotal">R$ 0,00</strong>
+                </div>
+                <button id="serviceSendBtn" type="button" class="primary-action service-send">Enviar cozinha</button>
+              </aside>
+            </div>
+          </section>
+
+          <section id="catalogView" class="view-panel" data-panel="catalog">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Vendas</p>
+                <h2>Catalogo de comidas e bebidas</h2>
+              </div>
+            </div>
+
+            <div class="catalog-layout">
+              <form id="catalogForm" class="module-panel form-panel">
+                <input id="catalogId" type="hidden">
+                <label for="productName">Produto</label>
+                <input id="productName" type="text" placeholder="X-Burger" required>
+
+                <label for="productCategory">Categoria</label>
+                <select id="productCategory" required>
+                  <option value="Comidas">Comidas</option>
+                  <option value="Bebidas">Bebidas</option>
+                  <option value="Combos">Combos</option>
+                  <option value="Extras">Extras</option>
+                </select>
+
+                <div class="form-grid">
+                  <div>
+                    <label for="productPrice">Preco</label>
+                    <input id="productPrice" type="number" min="0" step="0.01" placeholder="18.90" required>
+                  </div>
+                  <div>
+                    <label for="productStock">Qtd.</label>
+                    <input id="productStock" type="number" min="0" step="1" placeholder="20" required>
+                  </div>
+                </div>
+
+                <button type="submit" class="primary-action">Salvar produto</button>
+                <button id="cancelProductEdit" type="button" class="ghost-action is-hidden">Cancelar edicao</button>
+              </form>
+
+              <div class="module-panel">
+                <div class="panel-title-row">
+                  <h3>Itens cadastrados</h3>
+                  <div class="segmented-filter" aria-label="Filtrar catalogo">
+                    <button type="button" class="is-active" data-category-filter="Todos">Todos</button>
+                    <button type="button" data-category-filter="Comidas">Comidas</button>
+                    <button type="button" data-category-filter="Bebidas">Bebidas</button>
+                  </div>
+                </div>
+                <div id="catalogList" class="catalog-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="stockView" class="view-panel" data-panel="stock">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Almoxarifado</p>
+                <h2>Estoque</h2>
+              </div>
+            </div>
+
+            <div class="catalog-layout">
+              <form id="stockForm" class="module-panel form-panel">
+                <input id="stockId" type="hidden">
+                <label for="stockName">Item</label>
+                <input id="stockName" type="text" placeholder="Pao brioche" required>
+
+                <div class="form-grid">
+                  <div>
+                    <label for="stockQty">Quantidade</label>
+                    <input id="stockQty" type="number" min="0" step="1" placeholder="30" required>
+                  </div>
+                  <div>
+                    <label for="stockMin">Minimo</label>
+                    <input id="stockMin" type="number" min="0" step="1" placeholder="8" required>
+                  </div>
+                </div>
+
+                <label for="stockUnit">Unidade</label>
+                <select id="stockUnit">
+                  <option value="un">un</option>
+                  <option value="kg">kg</option>
+                  <option value="l">l</option>
+                  <option value="cx">cx</option>
+                  <option value="pct">pct</option>
+                </select>
+
+                <button type="submit" class="primary-action">Salvar estoque</button>
+                <button id="cancelStockEdit" type="button" class="ghost-action is-hidden">Cancelar edicao</button>
+              </form>
+
+              <div class="module-panel">
+                <div class="panel-title-row">
+                  <h3>Niveis do estoque</h3>
+                  <span id="stockAlertCount" class="status-pill"></span>
+                </div>
+                <div id="stockList" class="stock-list"></div>
+              </div>
+            </div>
+          </section>
+
+        </section>
+      </div>
+
+      <nav class="mobile-bottom-nav" aria-label="Atalhos mobile">
+        <button class="nav-button is-active" type="button" data-view="overview">
+          <span class="nav-icon" aria-hidden="true">01</span>
+          <span>Inicial</span>
+        </button>
+        <button class="nav-button" type="button" data-view="tables">
+          <span class="nav-icon" aria-hidden="true">02</span>
+          <span>Mesas</span>
+        </button>
+        <button class="nav-button" type="button" data-view="service">
+          <span class="nav-icon" aria-hidden="true">04</span>
+          <span>Atender</span>
+        </button>
+        <button class="nav-button" type="button" data-view="orders">
+          <span class="nav-icon" aria-hidden="true">03</span>
+          <span>Cozinha</span>
+        </button>
+      </nav>
+
+      <section id="callSpotlight" class="call-spotlight is-hidden" aria-live="assertive">
+        <div class="call-spotlight-card">
+          <span>Pedido pronto</span>
+          <strong id="callSpotlightTable">Mesa</strong>
+          <p id="callSpotlightMessage"></p>
+          <button id="callSpotlightClose" type="button" class="ghost-action">Fechar</button>
+        </div>
+      </section>
+
+      <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+      <section id="adminModal" class="admin-popup-shell is-hidden" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
+        <div class="admin-popup-window">
+          <header class="admin-popup-titlebar">
+            <div>
+              <p class="eyebrow">Administracao</p>
+              <h2 id="adminModalTitle">Painel do administrador</h2>
+            </div>
+            <button id="adminModalClose" type="button" class="window-close" aria-label="Fechar">X</button>
+          </header>
+
+          <div class="admin-tabs" aria-label="Configuracoes administrativas">
+            <button type="button" class="is-active" data-admin-tab="users">Usuarios</button>
+            <button type="button" data-admin-tab="passwords">Senhas</button>
+            <button type="button" data-admin-tab="sales">Vendas</button>
+          </div>
+
+          <div class="admin-popup-body">
+            <section class="admin-tab-panel is-active" data-admin-panel="users">
+              <div class="admin-panel-grid">
+                <form id="adminUserForm" class="admin-card form-panel" autocomplete="off">
+                  <div class="admin-card-title">
+                    <h3>Criar usuario</h3>
+                    <span class="status-pill status-free">Novo atendente</span>
+                  </div>
+
+                  <label for="adminDisplayName">Nome do atendente</label>
+                  <input id="adminDisplayName" type="text" placeholder="Maria Souza" autocomplete="off" required>
+
+                  <label for="adminUsername">Usuario</label>
+                  <input id="adminUsername" type="text" placeholder="maria" autocomplete="off" required>
+
+                  <label for="adminPassword">Senha inicial</label>
+                  <input id="adminPassword" type="password" placeholder="1234" autocomplete="new-password" required>
+
+                  <label for="adminRole">Perfil</label>
+                  <select id="adminRole">
+                    <option value="atendente">Atendente</option>
+                    <option value="cozinha">Cozinha</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+
+                  <button type="submit" class="primary-action">Criar usuario</button>
+                </form>
+
+                <section class="admin-card admin-users-panel">
+                  <div class="admin-card-title">
+                    <h3>Usuarios cadastrados</h3>
+                    <span id="adminUsersCount" class="status-pill"></span>
+                  </div>
+                  <div id="adminUsersList" class="admin-users-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section class="admin-tab-panel" data-admin-panel="passwords">
+              <form id="adminResetForm" class="admin-card form-panel admin-password-card" autocomplete="off">
+                <div class="admin-card-title">
+                  <h3>Resetar senha</h3>
+                  <span class="status-pill status-preparing">Acesso</span>
+                </div>
+
+                <label for="adminResetUser">Usuario</label>
+                <select id="adminResetUser"></select>
+
+                <label for="adminNewPassword">Nova senha</label>
+                <input id="adminNewPassword" type="password" placeholder="Nova senha" autocomplete="new-password" required>
+
+                <button type="submit" class="primary-action">Atualizar senha</button>
+              </form>
+            </section>
+
+            <section class="admin-tab-panel" data-admin-panel="sales">
+              <div id="adminSalesSummary" class="sales-summary"></div>
+              <div class="admin-panel-grid sales-panel-grid">
+                <section class="admin-card admin-users-panel">
+                  <div class="admin-card-title">
+                    <h3>Mesas com vendas</h3>
+                    <span class="status-pill status-free">Controle</span>
+                  </div>
+                  <div id="adminSalesTables" class="sales-list"></div>
+                </section>
+
+                <section class="admin-card admin-users-panel">
+                  <div class="admin-card-title">
+                    <h3>Itens vendidos</h3>
+                    <span class="status-pill status-preparing">Ranking</span>
+                  </div>
+                  <div id="adminSalesProducts" class="sales-list"></div>
+                </section>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
