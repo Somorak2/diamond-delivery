@@ -20,6 +20,14 @@
     return String(value || "").replace(/\s+/g, " ").trim();
   }
 
+  function cleanImageUrl(value) {
+    if (!value) return "";
+    if (typeof value === "object") return cleanImageUrl(readFirst(value, ["url", "src", "href", "path", "downloadUrl", "publicUrl"]));
+    const text = cleanText(value);
+    if (!text || text === "[object Object]") return "";
+    return /^(https?:|data:image\/|blob:|\/)/i.test(text) ? text : "";
+  }
+
   function parseNumber(value) {
     if (value === undefined || value === null || value === "") return null;
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -65,7 +73,8 @@
       name: cleanText(product.name),
       category: cleanText(product.category || "Sem categoria"),
       price: Number(product.price || 0),
-      stock: Math.max(0, Math.round(Number(product.stock ?? 999)))
+      stock: Math.max(0, Math.round(Number(product.stock ?? 999))),
+      imageUrl: cleanImageUrl(product.imageUrl || product.image_url || product.image || product.imagem || "")
     };
     if (!cleanProduct.name || !Number.isFinite(cleanProduct.price)) return;
     state.products.set(productKey(cleanProduct), cleanProduct);
@@ -96,7 +105,10 @@
       name,
       category: readFirst(object, ["category", "categoria", "group", "grupo", "section", "secao", "seção"]) || fallbackCategory || "Sem categoria",
       price,
-      stock: parseNumber(readFirst(object, ["stock", "estoque", "quantity", "quantidade", "qtd"])) ?? 999
+      stock: parseNumber(readFirst(object, ["stock", "estoque", "quantity", "quantidade", "qtd"])) ?? 999,
+      imageUrl: cleanImageUrl(readFirst(object, [
+        "imageUrl", "image_url", "image", "imagem", "photo", "foto", "picture", "thumbnail", "thumb", "urlImagem", "imageSrc", "src"
+      ]))
     };
   }
 
@@ -172,7 +184,8 @@
       if (price !== null) {
         const name = cleanText(text.replace(/R\$\s*[0-9.,]+/gi, "").replace(/\b[0-9]+[,.][0-9]{2}\b/g, ""));
         if (name && !/\b(total|subtotal|entrega|taxa|desconto)\b/i.test(name)) {
-          addProduct({ name, category: currentCategory || "Sem categoria", price, stock: 999 });
+          const imageUrl = cleanText(node.querySelector?.("img")?.src || "");
+          addProduct({ name, category: currentCategory || "Sem categoria", price, stock: 999, imageUrl });
         }
         return;
       }

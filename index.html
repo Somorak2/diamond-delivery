@@ -6,9 +6,9 @@
     <title>Diamond Delivery</title>
     <meta name="theme-color" content="#101218">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css?v=simple-pos-1">
-    <script src="env.js?v=simple-pos-1"></script>
-    <script src="app.js?v=simple-pos-1" defer></script>
+    <link rel="stylesheet" href="styles.css?v=ops-2">
+    <script src="env.js?v=ops-2"></script>
+    <script src="app.js?v=ops-2" defer></script>
   </head>
   <body>
     <main id="loginView" class="login-shell" aria-labelledby="loginTitle">
@@ -38,7 +38,10 @@
       <section id="simplePosView" class="simple-pos-shell" aria-label="PDV simplificado">
         <header class="simple-pos-tabs" aria-label="Principal">
           <button type="button" class="simple-tab is-active" data-simple-tab="tables">Mesas</button>
-          <button type="button" class="simple-tab" data-simple-tab="commands">Comandas</button>
+          <button type="button" class="simple-tab" data-simple-tab="kitchen">Cozinha</button>
+          <button type="button" class="simple-tab" data-simple-tab="delivery">Delivery</button>
+          <button type="button" class="simple-tab" data-simple-tab="stock">Estoque</button>
+          <button type="button" class="simple-tab" data-simple-tab="history">Historico</button>
           <div class="simple-top-actions">
             <button id="simpleAdminBtn" type="button" class="simple-icon-button" title="Admin" aria-label="Admin">Adm</button>
             <button id="simpleLogoutBtn" type="button" class="simple-icon-button" title="Sair" aria-label="Sair">Sair</button>
@@ -61,10 +64,13 @@
 
           <div id="simpleTablesGrid" class="simple-tables-grid"></div>
 
-          <button id="simpleDeliveryBtn" type="button" class="simple-delivery-button">
-            <span aria-hidden="true">⌁</span>
-            Delivery/Para Levar
-          </button>
+          <div class="simple-table-actions">
+            <button id="simpleAddTableBtn" type="button" class="simple-secondary-wide">Adicionar mesa</button>
+            <button id="simpleDeliveryBtn" type="button" class="simple-delivery-button">
+              <span aria-hidden="true">⌁</span>
+              Delivery/Para Levar
+            </button>
+          </div>
         </section>
 
         <section id="simpleMenuScreen" class="simple-screen">
@@ -77,7 +83,17 @@
             </label>
           </header>
 
+          <div class="simple-order-context">
+            <span id="simpleAttendantName">Atendente</span>
+            <label>
+              Cliente
+              <input id="simpleCustomerName" type="text" autocomplete="off" placeholder="Nome do cliente">
+            </label>
+            <span id="simpleOrderMeta">Sem comanda aberta</span>
+          </div>
+
           <nav id="simpleCategoryTabs" class="simple-category-tabs" aria-label="Categorias"></nav>
+          <nav id="simpleSubcategoryTabs" class="simple-subcategory-tabs" aria-label="Subcategorias"></nav>
           <h2 id="simpleCategoryTitle" class="simple-category-title">Bebidas</h2>
           <div id="simpleProductList" class="simple-product-list"></div>
 
@@ -95,10 +111,50 @@
           <div id="simpleCartItems" class="simple-cart-items"></div>
         </section>
 
+        <section id="simpleKitchenScreen" class="simple-screen">
+          <div class="simple-board-heading">
+            <div>
+              <strong>Cozinha</strong>
+              <span>Pedidos separados por etapa</span>
+            </div>
+          </div>
+          <div id="simpleKitchenBoard" class="simple-kitchen-board"></div>
+        </section>
+
+        <section id="simpleDeliveryScreen" class="simple-screen">
+          <div class="simple-board-heading">
+            <div>
+              <strong>Delivery / Para levar</strong>
+              <span>Pedidos fora das mesas</span>
+            </div>
+            <button id="simpleNewDeliveryBtn" type="button" class="simple-primary-button">Novo delivery</button>
+          </div>
+          <label class="simple-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="simpleDeliverySearch" type="search" autocomplete="off" placeholder="Buscar delivery, cliente ou produto">
+          </label>
+          <div id="simpleDeliveryList" class="simple-command-list"></div>
+        </section>
+
+        <section id="simpleStockScreen" class="simple-screen">
+          <div class="simple-board-heading">
+            <div>
+              <strong>Estoque</strong>
+              <span>Controle rapido dos produtos vendidos</span>
+            </div>
+          </div>
+          <label class="simple-search">
+            <span aria-hidden="true">⌕</span>
+            <input id="simpleStockSearch" type="search" autocomplete="off" placeholder="Buscar item do estoque">
+          </label>
+          <div id="simpleStockStats" class="simple-table-stats"></div>
+          <div id="simpleStockList" class="simple-stock-list"></div>
+        </section>
+
         <section id="simpleCommandsScreen" class="simple-screen">
           <label class="simple-search">
             <span aria-hidden="true">⌕</span>
-            <input id="simpleCommandSearch" type="search" autocomplete="off" placeholder="Buscar por mesa, produto ou cliente">
+            <input id="simpleCommandSearch" type="search" autocomplete="off" placeholder="Historico por mesa, cliente, atendente ou produto">
           </label>
           <div id="simpleCommandList" class="simple-command-list"></div>
         </section>

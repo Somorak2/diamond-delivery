@@ -9,6 +9,7 @@ const USE_SUPABASE = Boolean(API_URL);
 const LOCAL_DEMO_ENABLED = !USE_SUPABASE && (isLocalRuntime() || String(ENV.ALLOW_LOCAL_DEMO || "").toLowerCase() === "true");
 const MEAT_POINTS = ["Mal passada", "Ao ponto", "Bem passada"];
 const POS_DEFAULT_TABLE_COUNT = 21;
+const POS_DEPARTMENTS = ["Todos", "Bebidas", "Comidas", "Sobremesas", "Extras"];
 const POS_CATEGORIES = [
   "Todos",
   "Bebidas",
@@ -134,7 +135,8 @@ let state = loadState();
 let catalogFilter = "Todos";
 let serviceCategory = "Todos";
 let simpleScreen = "tables";
-let simpleSelectedCategory = POS_CATEGORIES[0];
+let simpleSelectedCategory = POS_DEPARTMENTS[0];
+let simpleSelectedSubcategory = "Todos";
 let callSpotlightTimer = null;
 let remotePollTimer = null;
 let remoteSaveTimer = null;
@@ -208,16 +210,27 @@ function cacheElements() {
     simpleTabButtons: Array.from(document.querySelectorAll("[data-simple-tab]")),
     simpleTablesScreen: document.getElementById("simpleTablesScreen"),
     simpleMenuScreen: document.getElementById("simpleMenuScreen"),
+    simpleKitchenScreen: document.getElementById("simpleKitchenScreen"),
+    simpleDeliveryScreen: document.getElementById("simpleDeliveryScreen"),
+    simpleStockScreen: document.getElementById("simpleStockScreen"),
     simpleCommandsScreen: document.getElementById("simpleCommandsScreen"),
     simpleTableSearch: document.getElementById("simpleTableSearch"),
     simpleMenuSearch: document.getElementById("simpleMenuSearch"),
+    simpleDeliverySearch: document.getElementById("simpleDeliverySearch"),
+    simpleStockSearch: document.getElementById("simpleStockSearch"),
     simpleCommandSearch: document.getElementById("simpleCommandSearch"),
     simpleTablesGrid: document.getElementById("simpleTablesGrid"),
     simpleTableStats: document.getElementById("simpleTableStats"),
+    simpleAddTableBtn: document.getElementById("simpleAddTableBtn"),
     simpleDeliveryBtn: document.getElementById("simpleDeliveryBtn"),
+    simpleNewDeliveryBtn: document.getElementById("simpleNewDeliveryBtn"),
     simpleBackTablesBtn: document.getElementById("simpleBackTablesBtn"),
     simpleMenuTitle: document.getElementById("simpleMenuTitle"),
+    simpleAttendantName: document.getElementById("simpleAttendantName"),
+    simpleCustomerName: document.getElementById("simpleCustomerName"),
+    simpleOrderMeta: document.getElementById("simpleOrderMeta"),
     simpleCategoryTabs: document.getElementById("simpleCategoryTabs"),
+    simpleSubcategoryTabs: document.getElementById("simpleSubcategoryTabs"),
     simpleCategoryTitle: document.getElementById("simpleCategoryTitle"),
     simpleProductList: document.getElementById("simpleProductList"),
     simpleCartInfo: document.getElementById("simpleCartInfo"),
@@ -226,6 +239,10 @@ function cacheElements() {
     simpleCloseTableBtn: document.getElementById("simpleCloseTableBtn"),
     simpleCartClearBtn: document.getElementById("simpleCartClearBtn"),
     simpleSendOrderBtn: document.getElementById("simpleSendOrderBtn"),
+    simpleKitchenBoard: document.getElementById("simpleKitchenBoard"),
+    simpleDeliveryList: document.getElementById("simpleDeliveryList"),
+    simpleStockStats: document.getElementById("simpleStockStats"),
+    simpleStockList: document.getElementById("simpleStockList"),
     simpleCommandList: document.getElementById("simpleCommandList"),
     simpleAdminBtn: document.getElementById("simpleAdminBtn"),
     simpleLogoutBtn: document.getElementById("simpleLogoutBtn"),
@@ -320,9 +337,17 @@ function bindEvents() {
   });
   els.simpleTableSearch?.addEventListener("input", renderSimplePos);
   els.simpleMenuSearch?.addEventListener("input", renderSimplePos);
+  els.simpleDeliverySearch?.addEventListener("input", renderSimplePos);
+  els.simpleStockSearch?.addEventListener("input", renderSimplePos);
   els.simpleCommandSearch?.addEventListener("input", renderSimplePos);
   els.simpleBackTablesBtn?.addEventListener("click", () => switchSimpleScreen("tables"));
+  els.simpleAddTableBtn?.addEventListener("click", addSimpleTable);
   els.simpleDeliveryBtn?.addEventListener("click", openSimpleDelivery);
+  els.simpleNewDeliveryBtn?.addEventListener("click", openSimpleDelivery);
+  els.simpleCustomerName?.addEventListener("input", () => {
+    serviceDraft().customerName = els.simpleCustomerName.value;
+    saveState();
+  });
   els.simpleCartClearBtn?.addEventListener("click", () => {
     clearServiceDraft();
     renderSimplePos();
@@ -456,7 +481,7 @@ function showApp() {
   els.appView.classList.remove("is-hidden");
   const user = currentUser();
   const targetView = user?.role === "cozinha" ? "orders" : requestedView() || "tables";
-  simpleScreen = user?.role === "cozinha" ? "commands" : "tables";
+  simpleScreen = user?.role === "cozinha" ? "kitchen" : "tables";
   switchView(targetView);
   render();
 }
@@ -516,7 +541,7 @@ function renderUserChrome() {
 }
 
 function switchSimpleScreen(screen) {
-  if (!["tables", "menu", "commands"].includes(screen)) screen = "tables";
+  if (!["tables", "menu", "kitchen", "delivery", "stock", "history"].includes(screen)) screen = "tables";
   simpleScreen = screen;
   renderSimplePos();
 }
@@ -524,7 +549,7 @@ function switchSimpleScreen(screen) {
 function renderSimplePos() {
   if (!els.simplePosView) return;
   const user = currentUser();
-  if (user?.role === "cozinha" && simpleScreen !== "commands") simpleScreen = "commands";
+  if (user?.role === "cozinha" && simpleScreen !== "kitchen") simpleScreen = "kitchen";
 
   els.simplePosView.classList.toggle("is-menu-mode", simpleScreen === "menu");
   els.simpleTabButtons.forEach((button) => {
@@ -535,11 +560,17 @@ function renderSimplePos() {
 
   els.simpleTablesScreen?.classList.toggle("is-active", simpleScreen === "tables");
   els.simpleMenuScreen?.classList.toggle("is-active", simpleScreen === "menu");
-  els.simpleCommandsScreen?.classList.toggle("is-active", simpleScreen === "commands");
+  els.simpleKitchenScreen?.classList.toggle("is-active", simpleScreen === "kitchen");
+  els.simpleDeliveryScreen?.classList.toggle("is-active", simpleScreen === "delivery");
+  els.simpleStockScreen?.classList.toggle("is-active", simpleScreen === "stock");
+  els.simpleCommandsScreen?.classList.toggle("is-active", simpleScreen === "history");
 
   if (simpleScreen === "tables") renderSimpleTables();
   if (simpleScreen === "menu") renderSimpleMenu();
-  if (simpleScreen === "commands") renderSimpleCommands();
+  if (simpleScreen === "kitchen") renderSimpleKitchen();
+  if (simpleScreen === "delivery") renderSimpleDelivery();
+  if (simpleScreen === "stock") renderSimpleStock();
+  if (simpleScreen === "history") renderSimpleCommands();
 }
 
 function renderSimpleTables() {
@@ -606,9 +637,26 @@ function renderSimpleMenu() {
   state.selectedTableId = table.id;
   setSimpleDraftTable(table.id);
   els.simpleMenuTitle.textContent = simpleTableLabel(table);
+  const draft = serviceDraft();
+  const order = currentOrder(table);
+  const user = currentUser();
+  if (els.simpleAttendantName) {
+    els.simpleAttendantName.textContent = `Atendente: ${user?.displayName || order?.attendantName || "Nao informado"}`;
+  }
+  if (els.simpleCustomerName && document.activeElement !== els.simpleCustomerName) {
+    els.simpleCustomerName.value = draft.customerName || order?.customerName || "";
+  }
+  if (els.simpleOrderMeta) {
+    const openQty = order ? order.items.reduce((sum, item) => sum + Number(item.qty || 0), 0) : 0;
+    els.simpleOrderMeta.textContent = order
+      ? `${statusLabel(order.status)} - ${openQty} itens - ${money.format(orderTotal(order))}`
+      : "Comanda nova";
+  }
 
-  const categories = posCategories();
+  const categories = posDepartments();
   if (!categories.includes(simpleSelectedCategory)) simpleSelectedCategory = categories[0] || "";
+  const subcategories = posSubcategories(simpleSelectedCategory);
+  if (!subcategories.includes(simpleSelectedSubcategory)) simpleSelectedSubcategory = subcategories[0] || "Todos";
 
   els.simpleCategoryTabs.innerHTML = categories.map((category) => `
     <button type="button" class="${category === simpleSelectedCategory ? "is-active" : ""}" data-simple-category="${escapeHtml(category)}">
@@ -619,26 +667,50 @@ function renderSimpleMenu() {
   els.simpleCategoryTabs.querySelectorAll("[data-simple-category]").forEach((button) => {
     button.addEventListener("click", () => {
       simpleSelectedCategory = button.dataset.simpleCategory;
+      simpleSelectedSubcategory = "Todos";
       renderSimpleMenu();
     });
   });
 
-  els.simpleCategoryTitle.textContent = simpleSelectedCategory || "Todos";
+  if (els.simpleSubcategoryTabs) {
+    els.simpleSubcategoryTabs.innerHTML = subcategories.map((category) => `
+      <button type="button" class="${category === simpleSelectedSubcategory ? "is-active" : ""}" data-simple-subcategory="${escapeHtml(category)}">
+        ${escapeHtml(category)}
+      </button>
+    `).join("");
+    els.simpleSubcategoryTabs.querySelectorAll("[data-simple-subcategory]").forEach((button) => {
+      button.addEventListener("click", () => {
+        simpleSelectedSubcategory = button.dataset.simpleSubcategory;
+        renderSimpleMenu();
+      });
+    });
+  }
+
   const query = String(els.simpleMenuSearch?.value || "").trim().toLowerCase();
   const products = state.catalog.filter((product) => {
     const matchesCategory = simpleCategoryMatches(product, simpleSelectedCategory);
+    const matchesSubcategory = simpleSubcategoryMatches(product, simpleSelectedSubcategory);
     const matchesQuery = !query || [product.name, product.category].join(" ").toLowerCase().includes(query);
-    return matchesCategory && matchesQuery;
+    return matchesCategory && matchesSubcategory && matchesQuery;
   });
+
+  if (els.simpleCategoryTitle) {
+    const titleParts = [simpleSelectedCategory || "Todos"];
+    if (simpleSelectedSubcategory && simpleSelectedSubcategory !== "Todos") titleParts.push(simpleSelectedSubcategory);
+    els.simpleCategoryTitle.textContent = `${titleParts.join(" / ")} - ${products.length} itens`;
+  }
 
   els.simpleProductList.innerHTML = products.map((product) => {
     const available = productAvailable(product.id);
     const disabled = available <= 0 ? "disabled" : "";
     return `
       <button class="simple-product-row" type="button" data-simple-add="${product.id}" ${disabled}>
-        <span class="simple-product-thumb" aria-hidden="true">${escapeHtml(productInitials(product.name))}</span>
-        <span class="simple-product-name">${escapeHtml(product.name)}</span>
-        <strong>${money.format(product.price)}</strong>
+        <img class="simple-product-image" src="${escapeHtml(productImageSrc(product))}" alt="">
+        <span class="simple-product-name">
+          <strong>${escapeHtml(product.name)}</strong>
+          <small>${escapeHtml(product.category || productDepartment(product))} - ${available} un</small>
+        </span>
+        <strong class="simple-product-price">${money.format(product.price)}</strong>
       </button>
     `;
   }).join("") || emptyState("Nenhum produto nesta categoria.");
@@ -716,19 +788,132 @@ function renderSimpleCommands() {
       return aClosed - bClosed || Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0);
     });
 
-  els.simpleCommandList.innerHTML = orders.map((order) => `
-    <article class="simple-command-card">
+  els.simpleCommandList.innerHTML = orders
+    .map((order) => renderSimpleOrderCard(order, { mode: "history", allowClose: true }))
+    .join("") || emptyState("Nenhuma venda registrada ainda.");
+
+  bindSimpleOrderActions(els.simpleCommandList);
+}
+
+function renderSimpleKitchen() {
+  if (!els.simpleKitchenBoard) return;
+  const activeOrders = state.orders
+    .filter((order) => Array.isArray(order.items) && order.items.length)
+    .filter((order) => ["waiting", "accepted", "preparing", "ready"].includes(order.status))
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+  const columns = [
+    ["Novos", activeOrders.filter((order) => order.status === "waiting")],
+    ["Em preparo", activeOrders.filter((order) => ["accepted", "preparing"].includes(order.status))],
+    ["Prontos", activeOrders.filter((order) => order.status === "ready")]
+  ];
+
+  els.simpleKitchenBoard.innerHTML = columns.map(([title, orders]) => `
+    <section class="simple-kitchen-column">
+      <header>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${orders.length}</span>
+      </header>
+      <div class="simple-kitchen-column-list">
+        ${orders.map((order) => renderSimpleOrderCard(order, { mode: "kitchen" })).join("") || emptyState("Nada aqui.")}
+      </div>
+    </section>
+  `).join("");
+  bindSimpleOrderActions(els.simpleKitchenBoard);
+}
+
+function renderSimpleDelivery() {
+  if (!els.simpleDeliveryList) return;
+  const query = String(els.simpleDeliverySearch?.value || "").trim().toLowerCase();
+  const orders = state.orders
+    .filter(isDeliveryOrder)
+    .filter((order) => {
+      const haystack = [
+        simpleOrderLabel(order),
+        order.customerName || "",
+        order.attendantName || "",
+        statusLabel(order.status),
+        ...order.items.map((item) => item.name)
+      ].join(" ").toLowerCase();
+      return !query || haystack.includes(query);
+    })
+    .sort((a, b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0));
+  els.simpleDeliveryList.innerHTML = orders
+    .map((order) => renderSimpleOrderCard(order, { mode: "delivery", allowClose: true }))
+    .join("") || emptyState("Nenhum delivery aberto. Use Novo delivery para abrir.");
+  bindSimpleOrderActions(els.simpleDeliveryList);
+}
+
+function renderSimpleStock() {
+  if (!els.simpleStockList) return;
+  const query = String(els.simpleStockSearch?.value || "").trim().toLowerCase();
+  const products = state.catalog
+    .filter((product) => {
+      const haystack = [product.name, product.category, productDepartment(product)].join(" ").toLowerCase();
+      return !query || haystack.includes(query);
+    })
+    .sort((a, b) => productDepartment(a).localeCompare(productDepartment(b), "pt-BR") || a.category.localeCompare(b.category, "pt-BR") || a.name.localeCompare(b.name, "pt-BR"));
+
+  const low = state.catalog.filter((product) => Number(product.stock || 0) <= 5).length;
+  const zero = state.catalog.filter((product) => Number(product.stock || 0) <= 0).length;
+  const stockValue = state.catalog.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.price || 0), 0);
+  if (els.simpleStockStats) {
+    els.simpleStockStats.innerHTML = [
+      ["Itens", state.catalog.length],
+      ["Baixo", low],
+      ["Zerado", zero],
+      ["Valor estoque", money.format(stockValue)]
+    ].map(([label, value]) => `
+      <article>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </article>
+    `).join("");
+  }
+
+  els.simpleStockList.innerHTML = products.map((product) => {
+    const stock = Number(product.stock || 0);
+    return `
+      <article class="simple-stock-row ${stock <= 0 ? "is-zero" : stock <= 5 ? "is-low" : ""}">
+        <img class="simple-product-image" src="${escapeHtml(productImageSrc(product))}" alt="">
+        <div class="simple-stock-main">
+          <strong>${escapeHtml(product.name)}</strong>
+          <span>${escapeHtml(product.category || productDepartment(product))} - ${money.format(product.price)}</span>
+        </div>
+        <strong class="simple-stock-qty">${stock} un</strong>
+        <div class="simple-command-actions">
+          <button type="button" data-simple-stock-action="minus" data-product-id="${product.id}">-1</button>
+          <button type="button" data-simple-stock-action="plus" data-product-id="${product.id}">+1</button>
+          <button type="button" data-simple-stock-action="plus10" data-product-id="${product.id}">+10</button>
+        </div>
+      </article>
+    `;
+  }).join("") || emptyState("Nenhum produto encontrado.");
+
+  els.simpleStockList.querySelectorAll("[data-simple-stock-action]").forEach((button) => {
+    button.addEventListener("click", () => handleSimpleStockAction(button.dataset.simpleStockAction, button.dataset.productId));
+  });
+}
+
+function renderSimpleOrderCard(order, { mode = "history", allowClose = false } = {}) {
+  const itemCount = order.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  return `
+    <article class="simple-command-card simple-order-mode-${escapeHtml(mode)}">
       <header>
         <div>
           <strong>${escapeHtml(simpleOrderLabel(order))}</strong>
-          <span>${escapeHtml(order.customerName || order.attendantName || "Atendente")}</span>
+          <span>${escapeHtml(order.customerName || "Cliente nao informado")} - ${escapeHtml(order.attendantName || "Atendente")}</span>
         </div>
         <span class="status-pill ${statusClass(order.status)}">${statusLabel(order.status)}</span>
       </header>
+      <div class="simple-order-meta">
+        <span>${escapeHtml(formatDateTime(order.createdAt))}</span>
+        <span>${itemCount} itens</span>
+        <span>${escapeHtml(productDepartmentFromOrder(order))}</span>
+      </div>
       <div class="simple-command-lines">
         ${order.items.map((item) => `
           <div>
-            <span>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</span>
+            <span>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}${item.meatPoint ? ` - ${escapeHtml(item.meatPoint)}` : ""}</span>
             <strong>${money.format(item.qty * item.price)}</strong>
           </div>
         `).join("")}
@@ -736,18 +921,29 @@ function renderSimpleCommands() {
       <footer>
         <strong>${money.format(orderTotal(order))}</strong>
         <div class="simple-command-actions">
-          ${order.status === "open" ? `<button type="button" data-simple-order-action="send" data-order-id="${order.id}">Enviar</button>` : ""}
-          ${order.status === "waiting" ? `<button type="button" data-simple-order-action="accept" data-order-id="${order.id}">Aceitar</button>` : ""}
-          ${order.status === "accepted" ? `<button type="button" data-simple-order-action="produce" data-order-id="${order.id}">Produzir</button>` : ""}
-          ${order.status === "preparing" ? `<button type="button" data-simple-order-action="ready" data-order-id="${order.id}">Pronto</button>` : ""}
-          ${order.status === "ready" ? `<button type="button" data-simple-order-action="call" data-order-id="${order.id}">Chamar</button>` : ""}
-          ${!["closed", "delivered"].includes(order.status) ? `<button type="button" data-simple-order-action="close" data-order-id="${order.id}">Finalizar</button>` : ""}
+          ${renderSimpleOrderActions(order, { mode, allowClose })}
         </div>
       </footer>
     </article>
-  `).join("") || emptyState("Nenhuma comanda encontrada.");
+  `;
+}
 
-  els.simpleCommandList.querySelectorAll("[data-simple-order-action]").forEach((button) => {
+function renderSimpleOrderActions(order, { mode = "history", allowClose = false } = {}) {
+  if (["closed", "delivered"].includes(order.status)) return "";
+  const actions = [];
+  if (order.status === "open") actions.push(["send", "Enviar"]);
+  if (order.status === "waiting") actions.push(["accept", "Aceitar"]);
+  if (order.status === "accepted") actions.push(["produce", "Produzir"]);
+  if (order.status === "preparing") actions.push(["ready", "Pronto"]);
+  if (order.status === "ready" && mode !== "kitchen") actions.push(["call", "Chamar"]);
+  if (allowClose || mode === "delivery") actions.push(["close", mode === "delivery" ? "Finalizar" : "Fechar"]);
+  return actions.map(([action, label]) => `
+    <button type="button" data-simple-order-action="${action}" data-order-id="${order.id}">${escapeHtml(label)}</button>
+  `).join("");
+}
+
+function bindSimpleOrderActions(container) {
+  container?.querySelectorAll("[data-simple-order-action]").forEach((button) => {
     button.addEventListener("click", () => handleSimpleOrderAction(button.dataset.simpleOrderAction, button.dataset.orderId));
   });
 }
@@ -771,12 +967,34 @@ function openSimpleDelivery() {
   openSimpleTable(table.id);
 }
 
+function addSimpleTable() {
+  const nextNumber = Number(window.prompt("Numero da nova mesa", nextAvailableTableNumber()));
+  if (!nextNumber || nextNumber === 999) return;
+  if (state.tables.some((table) => Number(table.number) === nextNumber)) {
+    showToast("Mesa ja existe", `Mesa ${nextNumber}`);
+    return;
+  }
+  const seats = Number(window.prompt("Quantidade de lugares", 4)) || 4;
+  const table = {
+    id: createId("table"),
+    number: nextNumber,
+    seats: Math.max(1, seats),
+    currentOrderId: null
+  };
+  state.tables.push(table);
+  state.selectedTableId = table.id;
+  simpleScreen = "tables";
+  persistAndRender();
+  showToast("Mesa adicionada", `Mesa ${nextNumber}`);
+}
+
 function sendSimpleOrder() {
   const draft = serviceDraft();
+  const table = state.tables.find((item) => item.id === draft.tableId);
   const beforeQty = draft.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   sendServiceOrder();
   if (beforeQty && serviceDraft().items.length === 0) {
-    simpleScreen = "tables";
+    simpleScreen = table && isDeliveryTable(table) ? "delivery" : "tables";
   }
   renderSimplePos();
 }
@@ -799,6 +1017,15 @@ function handleSimpleOrderAction(action, orderId) {
   if (action === "close") closeOrder(orderId);
 }
 
+function handleSimpleStockAction(action, productId) {
+  const product = state.catalog.find((item) => item.id === productId);
+  if (!product) return;
+  if (action === "minus") product.stock = Math.max(0, Number(product.stock || 0) - 1);
+  if (action === "plus") product.stock = Number(product.stock || 0) + 1;
+  if (action === "plus10") product.stock = Number(product.stock || 0) + 10;
+  persistAndRender();
+}
+
 function simpleTableStatus(table) {
   const order = currentOrder(table);
   if (!order) return { label: "Livre", className: "is-free" };
@@ -808,7 +1035,31 @@ function simpleTableStatus(table) {
 
 function simpleCategoryMatches(product, selectedCategory) {
   if (!selectedCategory || selectedCategory === "Todos") return true;
+  return normalizeHeader(productDepartment(product)) === normalizeHeader(selectedCategory);
+}
+
+function simpleSubcategoryMatches(product, selectedCategory) {
+  if (!selectedCategory || selectedCategory === "Todos") return true;
   return normalizeHeader(product.category) === normalizeHeader(selectedCategory);
+}
+
+function posDepartments() {
+  const present = new Set(["Todos"]);
+  state.catalog.forEach((product) => present.add(productDepartment(product)));
+  return POS_DEPARTMENTS.filter((department) => present.has(department));
+}
+
+function posSubcategories(department) {
+  const productCategories = [];
+  state.catalog.forEach((product) => {
+    if (department && department !== "Todos" && productDepartment(product) !== department) return;
+    const category = cleanImportText(product.category || "Sem categoria");
+    if (category && !productCategories.some((item) => normalizeHeader(item) === normalizeHeader(category))) {
+      productCategories.push(category);
+    }
+  });
+
+  return ["Todos", ...productCategories.sort((a, b) => a.localeCompare(b, "pt-BR"))];
 }
 
 function posCategories() {
@@ -836,18 +1087,52 @@ function posCategories() {
   return categories;
 }
 
+function productDepartment(product) {
+  const text = normalizeHeader(`${product?.category || ""} ${product?.name || ""}`);
+  if (!text) return "Comidas";
+  if (/(bebida|agua|aguas|refrigerante|coca|fanta|guarana|sprite|energetico|monster|redbull|suco|cerveja|longneck|longneck|chopp|drink|vodka|whisky|whiskies|gin|cachaca|caipirinha|ice|milkshake|milkshakes|polpa)/.test(text)) {
+    return "Bebidas";
+  }
+  if (/(sorvete|sorvetes|acai|doce|doces|chocolate|sobremesa|snack|snacks|picole|paleta)/.test(text)) {
+    return "Sobremesas";
+  }
+  if (/(cigarro|cigarros|sinuca|isqueiro|despesa|despesas|taxa|servico|couvert|dividido|divididos)/.test(text)) {
+    return "Extras";
+  }
+  if (/(lanche|lanches|burger|hamburg|hamburguer|sanduiche|hotdog|pastel|pasteis|porcao|porcoes|batata|frango|calabresa|pizza|salgado|mandioca|refeicao|xsalada|xbacon|xtudo|xburguer|xburger|beirute|prato|comida)/.test(text)) {
+    return "Comidas";
+  }
+  return "Comidas";
+}
+
 function isDeliveryTable(table) {
   return Boolean(table?.isDelivery) || Number(table?.number) === 999;
+}
+
+function isDeliveryOrder(order) {
+  const table = state.tables.find((item) => item.id === order.tableId);
+  return isDeliveryTable(table) || Number(order?.tableNumber) === 999;
 }
 
 function simpleTableLabel(table) {
   return isDeliveryTable(table) ? "Delivery/Para Levar" : `Mesa ${table.number}`;
 }
 
+function callTableLabel(tableNumber) {
+  return Number(tableNumber) === 999 ? "Delivery/Para Levar" : `Mesa ${tableNumber || "-"}`;
+}
+
 function simpleOrderLabel(order) {
   const table = state.tables.find((item) => item.id === order.tableId);
   if (table) return simpleTableLabel(table);
   return Number(order.tableNumber) === 999 ? "Delivery/Para Levar" : `Mesa ${order.tableNumber || "-"}`;
+}
+
+function productDepartmentFromOrder(order) {
+  const departments = Array.from(new Set(order.items.map((item) => productDepartment(item))));
+  if (!departments.length) return "Sem itens";
+  if (departments.length === 1) return departments[0];
+  return `${departments.length} setores`;
 }
 
 function setSimpleDraftTable(tableId) {
@@ -868,6 +1153,45 @@ function productInitials(name) {
   if (!words.length) return "PD";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return `${words[0][0]}${words[1][0]}`.toUpperCase();
+}
+
+function productImageSrc(product) {
+  const directImage = cleanImageUrl(product?.imageUrl || product?.image_url || product?.image || product?.imagem || "");
+  if (directImage) return directImage;
+
+  const department = productDepartment(product);
+  const palette = {
+    Bebidas: ["#26b7ff", "#31d58a", "#071018"],
+    Comidas: ["#ff4d6d", "#ffca3a", "#16090d"],
+    Sobremesas: ["#b86bff", "#45f0df", "#120918"],
+    Extras: ["#9cadb9", "#26b7ff", "#071018"]
+  }[department] || ["#26b7ff", "#45f0df", "#071018"];
+  const initials = escapeSvgText(productInitials(product?.name || "Produto"));
+  const label = escapeSvgText(department.toUpperCase().slice(0, 10));
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+      <defs>
+        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+          <stop stop-color="${palette[0]}" offset="0"/>
+          <stop stop-color="${palette[1]}" offset="1"/>
+        </linearGradient>
+      </defs>
+      <rect width="96" height="96" rx="14" fill="${palette[2]}"/>
+      <rect x="6" y="6" width="84" height="84" rx="12" fill="url(#g)" opacity=".22"/>
+      <circle cx="48" cy="40" r="24" fill="url(#g)" opacity=".9"/>
+      <text x="48" y="48" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="900" fill="#061014">${initials}</text>
+      <text x="48" y="78" text-anchor="middle" font-family="Arial,sans-serif" font-size="8" font-weight="900" fill="#ffffff">${label}</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeSvgText(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function renderMetrics() {
@@ -930,7 +1254,7 @@ function renderCallBoard() {
     <div class="call-card">
       <div>
         <span class="muted">${latestCall.type === "kitchen-ready" ? "Aviso da cozinha" : "Pedido pronto"}</span>
-        <strong>Mesa ${latestCall.tableNumber}</strong>
+        <strong>${escapeHtml(callTableLabel(latestCall.tableNumber))}</strong>
         <span>${escapeHtml(latestCall.message)}</span>
       </div>
     </div>
@@ -1081,7 +1405,7 @@ function renderOrderCard(order) {
   return `
     <article class="order-card">
       <div class="table-card-header">
-        <h4>Mesa ${order.tableNumber || table?.number || "-"}</h4>
+        <h4>${escapeHtml(table ? simpleTableLabel(table) : callTableLabel(order.tableNumber))}</h4>
         <strong>${money.format(orderTotal(order))}</strong>
       </div>
       <div class="order-meta-block compact-meta">
@@ -1423,6 +1747,7 @@ function applyAdminImport({ replace = false } = {}) {
 
   const result = importParsedData(data, { replace });
   simpleSelectedCategory = "Todos";
+  simpleSelectedSubcategory = "Todos";
   persistAndRender();
   updateImportPreview();
   showToast("Importacao concluida", `${result.tables} mesas e ${result.products} produtos aplicados.`);
@@ -1609,13 +1934,17 @@ function mapImportedProduct(row, fallbackCategory = "") {
   const name = readFirst(row, ["name", "nome", "produto", "product", "item", "descricao", "descrição", "title", "titulo"]);
   const priceRaw = readFirst(row, ["price", "preco", "preço", "valor", "vlr", "saleprice"]);
   const price = parseImportNumber(priceRaw);
+  const imageUrl = cleanImageUrl(readFirst(row, [
+    "imageUrl", "image_url", "image", "imagem", "photo", "foto", "picture", "thumbnail", "thumb", "urlImagem", "imageSrc", "src"
+  ]));
   if (!name || price === null) return null;
   return {
     id: createStableImportId("prod", `${name}-${readFirst(row, ["categoria", "category", "grupo"]) || fallbackCategory}`),
     name: cleanImportText(name),
     category: cleanImportText(readFirst(row, ["category", "categoria", "grupo", "group", "departamento"]) || fallbackCategory || "Bebidas"),
     price,
-    stock: Math.max(0, Math.round(parseImportNumber(readFirst(row, ["stock", "estoque", "quantidade", "qtd", "quantity"])) ?? 999))
+    stock: Math.max(0, Math.round(parseImportNumber(readFirst(row, ["stock", "estoque", "quantidade", "qtd", "quantity"])) ?? 999)),
+    imageUrl
   };
 }
 
@@ -1660,6 +1989,7 @@ function mergeImportedProducts(importedProducts, { replace = false } = {}) {
     const current = byKey.get(key);
     byKey.set(key, {
       ...product,
+      imageUrl: product.imageUrl || current?.imageUrl || "",
       id: current?.id || product.id || createStableImportId("prod", key)
     });
   });
@@ -1694,6 +2024,16 @@ function normalizeHeader(value) {
 
 function cleanImportText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function cleanImageUrl(value) {
+  if (!value) return "";
+  if (typeof value === "object") {
+    return cleanImageUrl(readFirst(value, ["url", "src", "href", "path", "downloadUrl", "publicUrl"]));
+  }
+  const text = cleanImportText(value);
+  if (!text || text === "[object Object]") return "";
+  return /^(https?:|data:image\/|blob:|\/)/i.test(text) ? text : "";
 }
 
 function parseImportNumber(value) {
@@ -2130,7 +2470,8 @@ function markOrderReady(orderId) {
 function notifyAttendantReady(order) {
   const table = state.tables.find((item) => item.id === order.tableId);
   const tableNumber = order.tableNumber || table?.number || "-";
-  const message = `Mesa ${tableNumber} pronta para retirada.`;
+  const label = table ? simpleTableLabel(table) : Number(tableNumber) === 999 ? "Delivery/Para Levar" : `Mesa ${tableNumber}`;
+  const message = `${label} pronto para retirada.`;
   state.staffAlerts.unshift({
     id: createId("alert"),
     type: "kitchen-ready",
@@ -2143,7 +2484,7 @@ function notifyAttendantReady(order) {
     createdAt: Date.now()
   });
   state.staffAlerts = state.staffAlerts.slice(0, 12);
-  showCallSpotlight(tableNumber, message);
+  showCallSpotlight(label, message);
   playReadySound();
 }
 
@@ -2159,7 +2500,8 @@ function callOrder(orderId) {
   if (!table) return;
 
   order.calledAt = Date.now();
-  const message = `Pedido da mesa ${table.number} esta pronto.`;
+  const label = simpleTableLabel(table);
+  const message = `${label} esta pronto.`;
   state.calls.unshift({
     id: createId("call"),
     orderId: order.id,
@@ -2170,8 +2512,8 @@ function callOrder(orderId) {
   state.calls = state.calls.slice(0, 8);
   saveState();
   render();
-  showCallSpotlight(table.number, message);
-  showToast("Chamada enviada", `Mesa ${table.number}`);
+  showCallSpotlight(label, message);
+  showToast("Chamada enviada", label);
   playReadySound();
   speak(message);
 }
@@ -2189,9 +2531,9 @@ function closeOrder(orderId) {
     state.serviceDraft.items = [];
     state.serviceDraft.customerName = "";
   }
-  if (simpleScreen === "menu" || simpleScreen === "commands") simpleScreen = "tables";
+  if (simpleScreen === "menu" || simpleScreen === "history") simpleScreen = isDeliveryOrder(order) ? "delivery" : "tables";
   persistAndRender();
-  if (table) showToast("Mesa finalizada", `Mesa ${table.number}`);
+  if (table) showToast(isDeliveryTable(table) ? "Delivery finalizado" : "Mesa finalizada", simpleTableLabel(table));
 }
 
 function clearCalls() {
@@ -2304,7 +2646,7 @@ function resetDemo() {
 }
 
 function currentOrder(table) {
-  return state.orders.find((order) => order.id === table.currentOrderId && order.status !== "closed") || null;
+  return state.orders.find((order) => order.id === table.currentOrderId && !["closed", "delivered"].includes(order.status)) || null;
 }
 
 function tableStatus(table) {
@@ -2381,6 +2723,16 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
+function formatDateTime(value) {
+  if (!value) return "--/-- --:--";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
 function needsMeatPoint(item) {
   const name = String(item?.name || "").toLowerCase();
   const category = String(item?.category || "").toLowerCase();
@@ -2414,6 +2766,13 @@ function productAvailable(productId) {
 
 function sortedTables() {
   return [...state.tables].sort((a, b) => a.number - b.number);
+}
+
+function nextAvailableTableNumber() {
+  const used = new Set(state.tables.map((table) => Number(table.number)));
+  let number = 1;
+  while (used.has(number)) number += 1;
+  return number;
 }
 
 function ensureDefaultTables(tables) {
@@ -2475,6 +2834,14 @@ function normalizeState(nextState) {
       normalized.users.push(structuredClone(seedUser));
     });
   }
+  normalized.catalog = normalized.catalog.map((product) => ({
+    id: product.id || createStableImportId("prod", `${product.name || "produto"}-${product.category || ""}`),
+    name: cleanImportText(product.name || "Produto"),
+    category: cleanImportText(product.category || productDepartment(product)),
+    price: Number(product.price || 0),
+    stock: Number(product.stock || 0),
+    imageUrl: cleanImageUrl(product.imageUrl || product.image_url || product.image || product.imagem || "")
+  }));
   normalized.serviceDraft = nextState.serviceDraft || { tableId: normalized.selectedTableId || "", customerName: "", items: [] };
   if (!Array.isArray(normalized.serviceDraft.items)) normalized.serviceDraft.items = [];
   if (typeof normalized.serviceDraft.customerName !== "string") normalized.serviceDraft.customerName = "";
@@ -2702,6 +3069,7 @@ function productToRemoteRow(product) {
     category: product.category,
     price: Number(product.price || 0),
     stock: Number(product.stock || 0),
+    image_url: product.imageUrl || "",
     updated_at: new Date().toISOString()
   };
 }
@@ -2807,7 +3175,8 @@ function remoteRowsToState(rows) {
       name: row.name,
       category: row.category,
       price: Number(row.price || 0),
-      stock: Number(row.stock || 0)
+      stock: Number(row.stock || 0),
+      imageUrl: row.image_url || ""
     })),
     stock: rows.stockRows.map((row) => ({
       id: row.id,
@@ -2956,7 +3325,8 @@ function showToast(title, message = "") {
 function showCallSpotlight(tableNumber, message) {
   if (!els.callSpotlight) return;
   window.clearTimeout(callSpotlightTimer);
-  els.callSpotlightTable.textContent = `Mesa ${tableNumber}`;
+  const label = String(tableNumber || "");
+  els.callSpotlightTable.textContent = /^(mesa|delivery)/i.test(label) ? label : `Mesa ${label}`;
   els.callSpotlightMessage.textContent = message;
   els.callSpotlight.classList.remove("is-hidden");
   callSpotlightTimer = window.setTimeout(hideCallSpotlight, 4200);
