@@ -212,6 +212,7 @@ function cacheElements() {
     simpleMenuSearch: document.getElementById("simpleMenuSearch"),
     simpleCommandSearch: document.getElementById("simpleCommandSearch"),
     simpleTablesGrid: document.getElementById("simpleTablesGrid"),
+    simpleTableStats: document.getElementById("simpleTableStats"),
     simpleDeliveryBtn: document.getElementById("simpleDeliveryBtn"),
     simpleBackTablesBtn: document.getElementById("simpleBackTablesBtn"),
     simpleMenuTitle: document.getElementById("simpleMenuTitle"),
@@ -295,6 +296,12 @@ function cacheElements() {
     adminSalesSummary: document.getElementById("adminSalesSummary"),
     adminSalesTables: document.getElementById("adminSalesTables"),
     adminSalesProducts: document.getElementById("adminSalesProducts"),
+    adminImportFile: document.getElementById("adminImportFile"),
+    adminImportText: document.getElementById("adminImportText"),
+    adminImportMergeBtn: document.getElementById("adminImportMergeBtn"),
+    adminImportReplaceBtn: document.getElementById("adminImportReplaceBtn"),
+    adminImportSummary: document.getElementById("adminImportSummary"),
+    adminImportPreview: document.getElementById("adminImportPreview"),
     adminTabButtons: Array.from(document.querySelectorAll("[data-admin-tab]")),
     adminTabPanels: Array.from(document.querySelectorAll("[data-admin-panel]"))
   });
@@ -358,6 +365,10 @@ function bindEvents() {
   });
   els.adminUserForm.addEventListener("submit", createAdminUser);
   els.adminResetForm.addEventListener("submit", resetAdminPassword);
+  els.adminImportText?.addEventListener("input", updateImportPreview);
+  els.adminImportFile?.addEventListener("change", handleImportFile);
+  els.adminImportMergeBtn?.addEventListener("click", () => applyAdminImport({ replace: false }));
+  els.adminImportReplaceBtn?.addEventListener("click", () => applyAdminImport({ replace: true }));
   els.catalogForm.addEventListener("submit", saveProduct);
   els.cancelProductEdit.addEventListener("click", cancelProductEdit);
   els.categoryFilters.forEach((button) => {
@@ -531,18 +542,46 @@ function renderSimplePos() {
 function renderSimpleTables() {
   if (!els.simpleTablesGrid) return;
   const query = String(els.simpleTableSearch?.value || "").trim().toLowerCase();
-  const tables = sortedTables()
-    .filter((table) => !isDeliveryTable(table))
+  const allTables = sortedTables().filter((table) => !isDeliveryTable(table));
+  const stats = allTables.reduce((acc, table) => {
+    const status = simpleTableStatus(table);
+    acc.total += 1;
+    if (status.className === "is-free") acc.free += 1;
+    if (status.className === "is-occupied") acc.occupied += 1;
+    if (status.className === "is-payment") acc.payment += 1;
+    const order = currentOrder(table);
+    if (order) acc.openValue += orderTotal(order);
+    return acc;
+  }, { total: 0, free: 0, occupied: 0, payment: 0, openValue: 0 });
+
+  if (els.simpleTableStats) {
+    els.simpleTableStats.innerHTML = [
+      ["Mesas", stats.total],
+      ["Livres", stats.free],
+      ["Ocupadas", stats.occupied],
+      ["Pagamento", stats.payment],
+      ["Em aberto", money.format(stats.openValue)]
+    ].map(([label, value]) => `
+      <article>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(String(value))}</strong>
+      </article>
+    `).join("");
+  }
+
+  const tables = allTables
     .filter((table) => !query || simpleTableLabel(table).toLowerCase().includes(query));
 
   els.simpleTablesGrid.innerHTML = tables.map((table) => {
     const order = currentOrder(table);
     const status = simpleTableStatus(table);
     const total = order ? orderTotal(order) : 0;
+    const itemQty = order ? order.items.reduce((sum, item) => sum + Number(item.qty || 0), 0) : 0;
     return `
       <button class="simple-table-card ${status.className}" type="button" data-simple-table-id="${table.id}" aria-label="${escapeHtml(simpleTableLabel(table))}">
-        <strong>${escapeHtml(simpleTableLabel(table))}</strong>
-        ${order ? `<span>${money.format(total)}</span>` : ""}
+        <span class="simple-table-name">${escapeHtml(simpleTableLabel(table))}</span>
+        <strong>${order ? money.format(total) : "Livre"}</strong>
+        <span class="simple-table-foot">${escapeHtml(status.label)}${order ? ` - ${itemQty} itens` : ""}</span>
       </button>
     `;
   }).join("") || emptyState("Nenhuma mesa encontrada.");
@@ -1249,6 +1288,409 @@ function renderSalesDashboard() {
   els.adminSalesProducts.innerHTML = productRows || emptyState("Nenhum item vendido ainda.");
 }
 
+function handleImportFile() {
+  const file = els.adminImportFile?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    els.adminImportText.value = String(reader.result || "");
+    updateImportPreview();
+  });
+  reader.addEventListener("error", () => showToast("Falha ao ler arquivo", "Tente copiar e colar o conteudo."));
+  reader.readAsText(file);
+}
+
+function updateImportPreview() {
+  if (!els.adminImportPreview || !els.adminImportSummary) return;
+  const raw = String(els.adminImportText?.value || "").trim();
+  if (!raw) {
+    els.adminImportSummary.textContent = "Aguardando";
+    els.adminImportPreview.innerHTML = emptyState("Cole ou selecione um arquivo para ver a previa.");
+    return;
+  }
+
+  try {
+    const data = parseImportPayload(raw);
+    els.adminImportSummary.textContent = `${data.tables.length} mesas / ${data.catalog.length} produtos`;
+    els.adminImportPreview.innerHTML = renderImportPreview(data);
+  } catch (error) {
+    els.adminImportSummary.textContent = "Erro";
+    els.adminImportPreview.innerHTML = emptyState(error.message || "Nao consegui entender os dados.");
+  }
+}
+
+function renderImportPreview(data) {
+  const tablePreview = data.tables
+    .slice(0, 10)
+    .map((table) => `<span>Mesa ${escapeHtml(table.number)}${table.seats ? ` - ${escapeHtml(table.seats)} lugares` : ""}</span>`)
+    .join("");
+  const productPreview = data.catalog
+    .slice(0, 14)
+    .map((product) => `
+      <article class="import-preview-row">
+        <div>
+          <strong>${escapeHtml(product.name)}</strong>
+          <span>${escapeHtml(product.category || "Sem categoria")} - estoque ${escapeHtml(product.stock)}</span>
+        </div>
+        <span class="price-text">${money.format(product.price)}</span>
+      </article>
+    `).join("");
+
+  return `
+    <div class="import-preview-group">
+      <h4>Mesas encontradas</h4>
+      <div class="import-chip-list">${tablePreview || "<span>Nenhuma mesa detectada</span>"}</div>
+    </div>
+    <div class="import-preview-group">
+      <h4>Produtos encontrados</h4>
+      <div class="import-preview-list">${productPreview || emptyState("Nenhum produto detectado.")}</div>
+    </div>
+  `;
+}
+
+function applyAdminImport({ replace = false } = {}) {
+  const raw = String(els.adminImportText?.value || "").trim();
+  if (!raw) {
+    showToast("Nada para importar", "Cole os dados ou selecione um arquivo.");
+    return;
+  }
+
+  let data;
+  try {
+    data = parseImportPayload(raw);
+  } catch (error) {
+    showToast("Importacao invalida", error.message || "Confira os dados.");
+    return;
+  }
+
+  if (!data.tables.length && !data.catalog.length) {
+    showToast("Nada encontrado", "Nao achei mesas nem produtos no texto.");
+    return;
+  }
+
+  if (replace) {
+    if (!window.confirm("Substituir mesas/produtos encontrados? Comandas abertas serao mantidas quando a mesa tiver o mesmo numero.")) {
+      return;
+    }
+  }
+
+  const result = importParsedData(data, { replace });
+  simpleSelectedCategory = posCategories()[0] || simpleSelectedCategory;
+  persistAndRender();
+  updateImportPreview();
+  showToast("Importacao concluida", `${result.tables} mesas e ${result.products} produtos aplicados.`);
+}
+
+function importParsedData(data, { replace = false } = {}) {
+  let tableCount = 0;
+  let productCount = 0;
+
+  if (data.tables.length) {
+    state.tables = mergeImportedTables(data.tables, { replace });
+    tableCount = data.tables.length;
+  }
+
+  if (data.catalog.length) {
+    state.catalog = mergeImportedProducts(data.catalog, { replace });
+    productCount = data.catalog.length;
+  }
+
+  state.selectedTableId = sortedTables()[0]?.id || "";
+  state.serviceDraft = { tableId: state.selectedTableId, customerName: "", items: [] };
+  return { tables: tableCount, products: productCount };
+}
+
+function parseImportPayload(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { tables: [], catalog: [] };
+
+  if (looksLikeJson(text)) {
+    return normalizeImportedData(parseImportJson(text));
+  }
+
+  const rows = parseDelimitedRows(text);
+  const fromRows = rows.length >= 2 ? normalizeImportedData(rowsToImportedData(rows)) : { tables: [], catalog: [] };
+  if (fromRows.tables.length || fromRows.catalog.length) return fromRows;
+
+  return normalizeImportedData(linesToImportedData(text));
+}
+
+function parseImportJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error("JSON invalido.");
+  }
+}
+
+function looksLikeJson(text) {
+  return text.startsWith("{") || text.startsWith("[");
+}
+
+function normalizeImportedData(input) {
+  const tables = [];
+  const catalog = [];
+  const pushTable = (table) => {
+    const mapped = mapImportedTable(table);
+    if (mapped && !tables.some((item) => item.number === mapped.number)) tables.push(mapped);
+  };
+  const pushProduct = (product, fallbackCategory = "") => {
+    const mapped = mapImportedProduct(product, fallbackCategory);
+    if (mapped && !catalog.some((item) => importKey(item.name, item.category) === importKey(mapped.name, mapped.category))) {
+      catalog.push(mapped);
+    }
+  };
+
+  if (Array.isArray(input)) {
+    input.forEach((item) => {
+      const table = mapImportedTable(item);
+      const product = mapImportedProduct(item);
+      if (table && !product) pushTable(table);
+      if (product) pushProduct(product);
+    });
+    return { tables: sortImportedTables(tables), catalog };
+  }
+
+  const data = input || {};
+  pickArray(data, ["tables", "mesas", "tableList"]).forEach(pushTable);
+  pickArray(data, ["catalog", "products", "produtos", "items", "itens", "menu"]).forEach((item) => pushProduct(item));
+  pickArray(data, ["categories", "categorias", "grupos"]).forEach((category) => {
+    const categoryName = readFirst(category, ["name", "nome", "title", "titulo", "categoria"]) || "";
+    pickArray(category, ["products", "produtos", "items", "itens"]).forEach((item) => pushProduct(item, categoryName));
+  });
+
+  return { tables: sortImportedTables(tables), catalog };
+}
+
+function rowsToImportedData(rows) {
+  const headers = rows[0].map(normalizeHeader);
+  const hasKnownHeader = headers.some((header) => [
+    "nome", "produto", "item", "categoria", "preco", "valor", "mesa", "numero", "estoque", "quantidade"
+  ].includes(header));
+  if (!hasKnownHeader) return linesToImportedData(rows.map((row) => row.join(" ")).join("\n"));
+
+  const tables = [];
+  const catalog = [];
+  rows.slice(1).forEach((row) => {
+    const record = {};
+    headers.forEach((header, index) => {
+      record[header] = row[index] || "";
+    });
+    const product = mapImportedProduct(record);
+    const table = mapImportedTable(record);
+    if (product) catalog.push(product);
+    if (table && !product) tables.push(table);
+  });
+  return { tables, catalog };
+}
+
+function linesToImportedData(text) {
+  const tables = [];
+  const catalog = [];
+  let currentCategory = "";
+  String(text).split(/\r?\n/).forEach((rawLine) => {
+    const line = rawLine.trim().replace(/\s+/g, " ");
+    if (!line || shouldIgnoreImportLine(line)) return;
+
+    const tableMatch = line.match(/\bmesa\s*([0-9]{1,4})\b/i);
+    if (tableMatch) {
+      tables.push({ number: Number(tableMatch[1]), seats: 4 });
+      return;
+    }
+
+    const price = extractPrice(line);
+    if (price !== null) {
+      const name = line
+        .replace(/R\$\s*[0-9.,]+/gi, "")
+        .replace(/\b[0-9]+[,.][0-9]{2}\b/g, "")
+        .replace(/\s+-\s+$/g, "")
+        .trim();
+      if (name) {
+        catalog.push({
+          name,
+          category: currentCategory || "Bebidas",
+          price,
+          stock: 999
+        });
+      }
+      return;
+    }
+
+    if (line.length <= 60 && !/\d{3,}/.test(line)) currentCategory = line;
+  });
+  return { tables, catalog };
+}
+
+function parseDelimitedRows(text) {
+  const sample = String(text).split(/\r?\n/).slice(0, 4).join("\n");
+  const delimiter = [";", "\t", ","].sort((a, b) => countChar(sample, b) - countChar(sample, a))[0];
+  if (!delimiter || countChar(sample, delimiter) === 0) return [];
+  return String(text)
+    .split(/\r?\n/)
+    .map((line) => parseDelimitedLine(line, delimiter).map((cell) => cell.trim()))
+    .filter((row) => row.some(Boolean));
+}
+
+function parseDelimitedLine(line, delimiter) {
+  const cells = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (char === delimiter && !quoted) {
+      cells.push(cell);
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+  cells.push(cell);
+  return cells;
+}
+
+function mapImportedProduct(row, fallbackCategory = "") {
+  const name = readFirst(row, ["name", "nome", "produto", "product", "item", "descricao", "descrição", "title", "titulo"]);
+  const priceRaw = readFirst(row, ["price", "preco", "preço", "valor", "vlr", "saleprice"]);
+  const price = parseImportNumber(priceRaw);
+  if (!name || price === null) return null;
+  return {
+    id: createStableImportId("prod", `${name}-${readFirst(row, ["categoria", "category", "grupo"]) || fallbackCategory}`),
+    name: cleanImportText(name),
+    category: cleanImportText(readFirst(row, ["category", "categoria", "grupo", "group", "departamento"]) || fallbackCategory || "Bebidas"),
+    price,
+    stock: Math.max(0, Math.round(parseImportNumber(readFirst(row, ["stock", "estoque", "quantidade", "qtd", "quantity"])) ?? 999))
+  };
+}
+
+function mapImportedTable(row) {
+  const type = String(readFirst(row, ["type", "tipo", "categoria"]) || "").toLowerCase();
+  const numberRaw = readFirst(row, ["number", "numero", "número", "mesa", "table", "nome", "name", "produto", "product", "item", "descricao", "descrição"]);
+  const match = String(numberRaw || "").match(/[0-9]{1,4}/);
+  const number = match ? Number(match[0]) : null;
+  if (!number || number === 999) return null;
+  const looksTable = type.includes("mesa") || String(numberRaw || "").toLowerCase().includes("mesa") || row.number || row.numero || row.mesa || row.table;
+  if (!looksTable && mapImportedProduct(row)) return null;
+  return {
+    id: `table-${number}`,
+    number,
+    seats: Math.max(0, Math.round(parseImportNumber(readFirst(row, ["seats", "lugares", "assentos", "capacity", "capacidade"])) ?? 4)),
+    currentOrderId: null
+  };
+}
+
+function mergeImportedTables(importedTables, { replace = false } = {}) {
+  const currentByNumber = new Map(state.tables.map((table) => [Number(table.number), table]));
+  const base = replace ? [] : state.tables.map((table) => ({ ...table }));
+  const byNumber = new Map(base.map((table) => [Number(table.number), table]));
+
+  importedTables.forEach((table) => {
+    const current = currentByNumber.get(Number(table.number));
+    byNumber.set(Number(table.number), {
+      ...table,
+      id: current?.id || table.id || `table-${table.number}`,
+      currentOrderId: current?.currentOrderId || null
+    });
+  });
+
+  return ensureDefaultTables(Array.from(byNumber.values()));
+}
+
+function mergeImportedProducts(importedProducts, { replace = false } = {}) {
+  const base = replace ? [] : state.catalog.map((product) => ({ ...product }));
+  const byKey = new Map(base.map((product) => [importKey(product.name, product.category), product]));
+  importedProducts.forEach((product) => {
+    const key = importKey(product.name, product.category);
+    const current = byKey.get(key);
+    byKey.set(key, {
+      ...product,
+      id: current?.id || product.id || createStableImportId("prod", key)
+    });
+  });
+  return Array.from(byKey.values()).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+}
+
+function pickArray(object, keys) {
+  for (const key of keys) {
+    if (Array.isArray(object?.[key])) return object[key];
+  }
+  return [];
+}
+
+function readFirst(row, keys) {
+  if (!row) return "";
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") return row[key];
+    const normalizedKey = normalizeHeader(key);
+    const foundKey = Object.keys(row).find((item) => normalizeHeader(item) === normalizedKey);
+    if (foundKey && String(row[foundKey]).trim() !== "") return row[foundKey];
+  }
+  return "";
+}
+
+function normalizeHeader(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function cleanImportText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function parseImportNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value).replace(/[^\d,.-]/g, "").trim();
+  if (!text) return null;
+  const normalized = text.includes(",")
+    ? text.replace(/\./g, "").replace(",", ".")
+    : text;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
+function extractPrice(line) {
+  const moneyMatch = String(line).match(/R\$\s*([0-9.]+,[0-9]{2}|[0-9]+(?:\.[0-9]{2})?)/i);
+  if (moneyMatch) return parseImportNumber(moneyMatch[1]);
+  const numberMatch = String(line).match(/\b([0-9]+[,.][0-9]{2})\b/);
+  return numberMatch ? parseImportNumber(numberMatch[1]) : null;
+}
+
+function shouldIgnoreImportLine(line) {
+  return /^(mesas|comandas|buscar|livres|ocupadas|em pagamento|delivery|para levar)$/i.test(line);
+}
+
+function countChar(text, char) {
+  return String(text).split(char).length - 1;
+}
+
+function sortImportedTables(tables) {
+  return tables
+    .filter((table, index, array) => array.findIndex((item) => item.number === table.number) === index)
+    .sort((a, b) => a.number - b.number);
+}
+
+function importKey(name, category = "") {
+  return `${normalizeHeader(category)}:${normalizeHeader(name)}`;
+}
+
+function createStableImportId(prefix, value) {
+  const slug = normalizeHeader(value).slice(0, 42) || Date.now().toString(36);
+  return `${prefix}-${slug}`;
+}
+
 async function openAdminModal() {
   const user = currentUser();
   if (user?.role !== "admin") {
@@ -1258,6 +1700,7 @@ async function openAdminModal() {
   if (USE_SUPABASE) await loadRemoteUsers();
   renderAdminUsers();
   renderSalesDashboard();
+  updateImportPreview();
   switchAdminTab("users");
   document.body.classList.add("modal-open");
   els.adminModal.classList.remove("is-hidden");

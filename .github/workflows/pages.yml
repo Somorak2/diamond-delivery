@@ -1,0 +1,46 @@
+name: Deploy Diamond Delivery
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Generate public env
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          PUBLIC_API_URL="${API_URL:-http://127.0.0.1:8787/api}"
+          printf 'window.DIAMOND_DELIVERY_ENV = Object.freeze({\n  API_URL: "%s"\n});\n' "$PUBLIC_API_URL" > env.js
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

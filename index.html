@@ -57,6 +57,8 @@
             <span><i class="legend-dot payment"></i>Em pagamento</span>
           </div>
 
+          <div id="simpleTableStats" class="simple-table-stats"></div>
+
           <div id="simpleTablesGrid" class="simple-tables-grid"></div>
 
           <button id="simpleDeliveryBtn" type="button" class="simple-delivery-button">
@@ -423,6 +425,7 @@
             <button type="button" class="is-active" data-admin-tab="users">Usuarios</button>
             <button type="button" data-admin-tab="passwords">Senhas</button>
             <button type="button" data-admin-tab="sales">Vendas</button>
+            <button type="button" data-admin-tab="import">Importar</button>
           </div>
 
           <div class="admin-popup-body">
@@ -497,6 +500,36 @@
                     <span class="status-pill status-preparing">Ranking</span>
                   </div>
                   <div id="adminSalesProducts" class="sales-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section class="admin-tab-panel" data-admin-panel="import">
+              <div class="admin-panel-grid import-panel-grid">
+                <section class="admin-card form-panel">
+                  <div class="admin-card-title">
+                    <h3>Importar Anota AI</h3>
+                    <span class="status-pill status-preparing">Mesas e produtos</span>
+                  </div>
+
+                  <label for="adminImportFile">Arquivo CSV/JSON</label>
+                  <input id="adminImportFile" type="file" accept=".csv,.json,.txt,text/csv,application/json,text/plain">
+
+                  <label for="adminImportText">Ou cole aqui</label>
+                  <textarea id="adminImportText" rows="12" spellcheck="false" placeholder="Cole CSV, JSON ou lista copiada do Anota AI. Ex: Produto;Categoria;Preco;Estoque"></textarea>
+
+                  <div class="form-grid">
+                    <button id="adminImportMergeBtn" type="button" class="primary-action">Importar mantendo dados</button>
+                    <button id="adminImportReplaceBtn" type="button" class="ghost-action">Substituir mesas/produtos</button>
+                  </div>
+                </section>
+
+                <section class="admin-card admin-users-panel">
+                  <div class="admin-card-title">
+                    <h3>Previa da importacao</h3>
+                    <span id="adminImportSummary" class="status-pill">Aguardando</span>
+                  </div>
+                  <div id="adminImportPreview" class="import-preview"></div>
                 </section>
               </div>
             </section>
