@@ -339,6 +339,7 @@ input:-webkit-autofill {
 .simple-icon-button,
 .simple-secondary-button,
 .simple-primary-button,
+.simple-danger-button,
 .simple-command-actions button,
 .simple-back-button {
   min-height: 36px;
@@ -734,9 +735,18 @@ input:-webkit-autofill {
 }
 
 .simple-secondary-button,
-.simple-primary-button {
+.simple-primary-button,
+.simple-danger-button {
   min-width: 96px;
   padding: 0 14px;
+}
+
+.simple-danger-button {
+  border-color: rgba(255, 77, 109, 0.58);
+  color: #ffd7df;
+  background:
+    linear-gradient(90deg, rgba(255, 77, 109, 0.2), rgba(255, 202, 58, 0.12)),
+    rgba(17, 28, 40, 0.96);
 }
 
 .simple-primary-button {
@@ -746,7 +756,8 @@ input:-webkit-autofill {
 }
 
 .simple-primary-button:disabled,
-.simple-secondary-button:disabled {
+.simple-secondary-button:disabled,
+.simple-danger-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -2268,7 +2279,8 @@ textarea:focus {
   }
 
   .simple-secondary-button,
-  .simple-primary-button {
+  .simple-primary-button,
+  .simple-danger-button {
     flex: 1;
   }
 

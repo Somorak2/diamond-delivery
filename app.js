@@ -10,6 +10,7 @@ const LOCAL_DEMO_ENABLED = !USE_SUPABASE && (isLocalRuntime() || String(ENV.ALLO
 const MEAT_POINTS = ["Mal passada", "Ao ponto", "Bem passada"];
 const POS_DEFAULT_TABLE_COUNT = 21;
 const POS_CATEGORIES = [
+  "Todos",
   "Bebidas",
   "Lanches",
   "Cerveja 600 ml",
@@ -222,6 +223,7 @@ function cacheElements() {
     simpleCartInfo: document.getElementById("simpleCartInfo"),
     simpleCartTotal: document.getElementById("simpleCartTotal"),
     simpleCartItems: document.getElementById("simpleCartItems"),
+    simpleCloseTableBtn: document.getElementById("simpleCloseTableBtn"),
     simpleCartClearBtn: document.getElementById("simpleCartClearBtn"),
     simpleSendOrderBtn: document.getElementById("simpleSendOrderBtn"),
     simpleCommandList: document.getElementById("simpleCommandList"),
@@ -325,6 +327,7 @@ function bindEvents() {
     clearServiceDraft();
     renderSimplePos();
   });
+  els.simpleCloseTableBtn?.addEventListener("click", closeSelectedSimpleTable);
   els.simpleSendOrderBtn?.addEventListener("click", sendSimpleOrder);
   els.navButtons.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
@@ -620,11 +623,11 @@ function renderSimpleMenu() {
     });
   });
 
-  els.simpleCategoryTitle.textContent = simpleSelectedCategory || "Produtos";
+  els.simpleCategoryTitle.textContent = simpleSelectedCategory || "Todos";
   const query = String(els.simpleMenuSearch?.value || "").trim().toLowerCase();
   const products = state.catalog.filter((product) => {
-    const matchesCategory = !simpleSelectedCategory || product.category === simpleSelectedCategory;
-    const matchesQuery = !query || product.name.toLowerCase().includes(query);
+    const matchesCategory = simpleCategoryMatches(product, simpleSelectedCategory);
+    const matchesQuery = !query || [product.name, product.category].join(" ").toLowerCase().includes(query);
     return matchesCategory && matchesQuery;
   });
 
@@ -649,12 +652,25 @@ function renderSimpleMenu() {
 
 function renderSimpleCart() {
   const draft = serviceDraft();
+  const table = state.tables.find((item) => item.id === draft.tableId);
+  const order = table ? currentOrder(table) : null;
   const qty = draft.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   const total = draftTotal(draft);
-  if (els.simpleCartInfo) els.simpleCartInfo.textContent = qty === 1 ? "1 item na comanda" : `${qty} itens na comanda`;
-  if (els.simpleCartTotal) els.simpleCartTotal.textContent = money.format(total);
+  const openTotal = order ? orderTotal(order) : 0;
+  if (els.simpleCartInfo) {
+    if (order && qty === 0) {
+      els.simpleCartInfo.textContent = `Comanda aberta - ${order.items.reduce((sum, item) => sum + Number(item.qty || 0), 0)} itens`;
+    } else {
+      els.simpleCartInfo.textContent = qty === 1 ? "1 item novo" : `${qty} itens novos`;
+    }
+  }
+  if (els.simpleCartTotal) els.simpleCartTotal.textContent = money.format(openTotal + total);
   if (els.simpleSendOrderBtn) els.simpleSendOrderBtn.disabled = qty === 0;
   if (els.simpleCartClearBtn) els.simpleCartClearBtn.disabled = qty === 0;
+  if (els.simpleCloseTableBtn) {
+    els.simpleCloseTableBtn.classList.toggle("is-hidden", !order);
+    els.simpleCloseTableBtn.disabled = !order;
+  }
   if (!els.simpleCartItems) return;
 
   els.simpleCartItems.innerHTML = draft.items.map((item) => `
@@ -765,6 +781,15 @@ function sendSimpleOrder() {
   renderSimplePos();
 }
 
+function closeSelectedSimpleTable() {
+  const draft = serviceDraft();
+  const table = state.tables.find((item) => item.id === draft.tableId || item.id === state.selectedTableId);
+  const order = table ? currentOrder(table) : null;
+  if (!table || !order) return;
+  if (!window.confirm(`Finalizar ${simpleTableLabel(table)}?`)) return;
+  closeOrder(order.id);
+}
+
 function handleSimpleOrderAction(action, orderId) {
   if (action === "send") updateOrderStatus(orderId, "waiting");
   if (action === "accept") updateOrderStatus(orderId, "accepted");
@@ -781,12 +806,34 @@ function simpleTableStatus(table) {
   return { label: "Ocupada", className: "is-occupied" };
 }
 
+function simpleCategoryMatches(product, selectedCategory) {
+  if (!selectedCategory || selectedCategory === "Todos") return true;
+  return normalizeHeader(product.category) === normalizeHeader(selectedCategory);
+}
+
 function posCategories() {
-  const categories = new Set(POS_CATEGORIES);
+  const productCategories = [];
   state.catalog.forEach((product) => {
-    if (product.category) categories.add(product.category);
+    const category = cleanImportText(product.category || "Sem categoria");
+    if (category && !productCategories.some((item) => normalizeHeader(item) === normalizeHeader(category))) {
+      productCategories.push(category);
+    }
   });
-  return Array.from(categories);
+
+  const categories = ["Todos"];
+  POS_CATEGORIES
+    .filter((category) => category !== "Todos")
+    .forEach((category) => {
+      const match = productCategories.find((item) => normalizeHeader(item) === normalizeHeader(category));
+      if (match && !categories.some((item) => normalizeHeader(item) === normalizeHeader(match))) categories.push(match);
+    });
+
+  productCategories
+    .filter((category) => !categories.some((item) => normalizeHeader(item) === normalizeHeader(category)))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .forEach((category) => categories.push(category));
+
+  return categories;
 }
 
 function isDeliveryTable(table) {
@@ -1375,7 +1422,7 @@ function applyAdminImport({ replace = false } = {}) {
   }
 
   const result = importParsedData(data, { replace });
-  simpleSelectedCategory = posCategories()[0] || simpleSelectedCategory;
+  simpleSelectedCategory = "Todos";
   persistAndRender();
   updateImportPreview();
   showToast("Importacao concluida", `${result.tables} mesas e ${result.products} produtos aplicados.`);
@@ -2135,7 +2182,14 @@ function closeOrder(orderId) {
   order.status = "closed";
   order.updatedAt = Date.now();
   const table = state.tables.find((item) => item.id === order.tableId);
-  if (table) table.currentOrderId = null;
+  state.tables.forEach((item) => {
+    if (item.currentOrderId === order.id) item.currentOrderId = null;
+  });
+  if (state.serviceDraft?.tableId === order.tableId) {
+    state.serviceDraft.items = [];
+    state.serviceDraft.customerName = "";
+  }
+  if (simpleScreen === "menu" || simpleScreen === "commands") simpleScreen = "tables";
   persistAndRender();
   if (table) showToast("Mesa finalizada", `Mesa ${table.number}`);
 }
